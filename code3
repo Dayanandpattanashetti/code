@@ -1,0 +1,1027 @@
+//////////////////////////////////////////////
+/////// MACD
+/////////////////////////////////////////////
+macd_group = "██████████ MACD ██████████"
+fast_length = input(title="Fast Length", defval=12,group=macd_group)
+slow_length = input(title="Slow Length", defval=26,group=macd_group)
+macdsrc = input(title="Source", defval=close,group=macd_group)
+signal_length = input.int(title="Signal Smoothing",  minval = 1, maxval = 50, defval = 9,group=macd_group)
+sma_source = input.string(title="Oscillator MA Type",  defval="EMA", options=["SMA", "EMA"],group=macd_group)
+sma_signal = input.string(title="Signal Line MA Type", defval="EMA", options=["SMA", "EMA"],group=macd_group)
+
+fast_ma = sma_source == "SMA" ? ta.sma(macdsrc, fast_length) : ta.ema(macdsrc, fast_length)
+slow_ma = sma_source == "SMA" ? ta.sma(macdsrc, slow_length) : ta.ema(macdsrc, slow_length)
+macdd = fast_ma - slow_ma
+signal = sma_signal == "SMA" ? ta.sma(macdd, signal_length) : ta.ema(macdd, signal_length)
+hist = macdd - signal
+
+
+
+
+
+/////////////////////////////////////////////
+///// Awesome Oscillator
+////////////////////////////////////////////
+
+ao_group = "██████████ Awesome Oscillator ██████████"
+nLengthSlow = input(34, title="Length Slow",group=ao_group)
+nLengthFast = input(5,  title="Length Fast",group=ao_group)
+reverse = input(false, title="Trade reverse",group=ao_group)
+xSMA1_hl2 = ta.sma(hl2, nLengthFast)
+xSMA2_hl2 = ta.sma(hl2, nLengthSlow)
+xSMA1_SMA2 = xSMA1_hl2 - xSMA2_hl2
+xSMA_hl2 = ta.sma(xSMA1_SMA2, nLengthFast)
+nRes =  xSMA1_SMA2 - xSMA_hl2
+
+
+
+
+//// zero line cross (standard code)
+ao = ta.sma(hl2,5) - ta.sma(hl2,34)
+diff = ao - ao[1]
+
+
+ao_long = bool(na)
+ao_short = bool(na)
+
+if aotype == "AC Zero Line Cross"
+    ao_long := nRes > nRes[1] and nRes > 0
+    ao_short := nRes < nRes[1] and nRes < 0
+else if aotype == "AC Momentum Bar"
+    ao_long := nRes > nRes[1] 
+    ao_short := nRes < nRes[1]
+else if aotype == "Zero Line Cross"
+    ao_long := ao > 0
+    ao_short := ao < 0
+
+
+
+
+/////////////////////////////////////////////
+///// WolfPack ID
+////////////////////////////////////////////
+
+wolfgroup = "██████████ Wolf Pack ID ██████████"
+input1 = input(title='Fast Length', group=wolfgroup,defval=3)
+input2 = input(title='Slow Length',group=wolfgroup, defval=8)
+pivR = input(title='Wolfpack Wave Pivot Lookback Right', group=wolfgroup,defval=1)
+pivL = input(title='Wolfpack Wave Pivot Lookback Left',group=wolfgroup, defval=15)
+fastmaa = ta.ema(close, input1)
+fastmab = ta.ema(close, input2)
+wolfsrc = close
+bspread = (fastmaa - fastmab) * 1.001
+adline = 0
+m = bspread > 0 ? color.new(color.lime, 0) : color.new(color.red, 0)
+wolfup = ta.rma(math.max(ta.change(wolfsrc), 0), 3)
+wolfdown = ta.rma(-math.min(ta.change(wolfsrc), 0), 3)
+lbR = input(title='Divergence Pivot Lookback Right',group=wolfgroup, defval=1)
+lbL = input(title='Divergence Pivot Lookback Left', group=wolfgroup,defval=10)
+rangeUpper = input(title='Max of Lookback Range',group=wolfgroup, defval=100)
+rangeLower = input(title='Min of Lookback Range', group=wolfgroup,defval=2)
+
+
+osc = bspread
+
+_inRange(cond) =>
+    bars = ta.barssince(cond == true)
+    rangeLower <= bars and bars <= rangeUpper
+
+
+
+wolf_long = bspread > 0
+wolf_short = bspread < 0
+
+
+
+
+
+/////////////////////////////////////////////
+///// Bollinger Band (BB)
+////////////////////////////////////////////
+
+bb_group= "██████████ Bollinger Band ██████████"
+bb_length = input.int(20, minval=1)
+bb_maType = input.string("SMA", "Basis MA Type", options = ["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"])
+bbsrc = input(close, title="Source")
+bbmult = input.float(2.0, minval=0.001, maxval=50, title="StdDev")
+
+
+
+bb_basis = ma(bbsrc, bb_length, bb_maType)
+bbdev = bbmult * ta.stdev(bbsrc, bb_length)
+bbupper = bb_basis + bbdev
+bblower = bb_basis - bbdev
+bboffset = input.int(0, "Offset", minval = -500, maxval = 500)
+plot(switch_bb ? bb_basis:na, "Basis", color=#FF6D00, offset = bboffset)
+bbp1 = plot(switch_bb ? bbupper:na, "Upper", color=#2962FF, offset = bboffset)
+bbp2 = plot(switch_bb ? bblower:na, "Lower", color=#2962FF, offset = bboffset)
+fillColor = switch_bb ? color.rgb(33, 150, 243, 95) : na
+fill(bbp1, bbp2, title = "Background", color=fillColor)
+
+
+
+
+
+/////////////////////////////////////////////
+///// BB Oscillator
+////////////////////////////////////////////
+bbgroup = "██████████ Bollinger Band (BB) Oscillator ██████████"
+
+bbosc_length = input.int(20, minval=1,group=bbgroup)
+bbosc_src = input(close, title='Source',group=bbgroup)
+bbosc_mult = input.float(2.0, minval=0.001, maxval=50, title='StdDev',group=bbgroup)
+bbosc_basis = ta.sma(bbosc_src, bbosc_length)
+dlength = input.int(4, minval=1, title='Trigger Length',group=bbgroup)
+bbosc_offset = input.int(0, 'Offset', minval=-500, maxval=500,group=bbgroup, tooltip = "Use Offset and Show Last to turn indicator into a widget.\nExample:\nOffset = 120\nShow Last = 100 ")
+bbosc_last = input(0, 'Show Last',group=bbgroup)
+bbosc_dev = bbosc_mult * ta.stdev(bbosc_src, bbosc_length)
+bbosc_upper = bbosc_basis + bbosc_dev
+bbosc_lower = bbosc_basis - bbosc_dev
+upercent = (bbosc_upper - close) / (bbosc_upper + close / 2)
+lpercent = (bbosc_lower - close) / (bbosc_lower + close / 2)
+bpercent = (bbosc_basis - close) / (bbosc_basis + close / 2)
+usmooth = ta.wma(upercent, 6)
+lsmooth = ta.wma(lpercent, 6)
+bsmooth = ta.wma(bpercent, 6)
+d1 = ta.sma(bsmooth, 2)
+j = (bsmooth + d1) * -1
+d2 = ta.sma(j, dlength)
+ 
+
+
+bbosc_long = bool(na)
+bbosc_short = bool(na)
+
+
+bbcycle = 0
+bbup = ta.crossover(j, usmooth)
+bbdown = ta.crossunder(j, lsmooth)
+bbcycle := bbup ? 1 : bbdown ? -1 : bbcycle[1]
+
+if bbtype == "Entering Lower/Upper Band"
+    bbosc_long := j > d2 and (j==lsmooth or j>lsmooth) and bbcycle==-1
+    bbosc_short:= j < d2 and (j==usmooth or j<usmooth) and bbcycle==1
+else if bbtype == "Exiting Lower/Upper Band"
+    bbosc_long := j > d2 and (j>usmooth) 
+    bbosc_short:= j < d2 and (j<lsmooth) 
+
+
+
+
+
+
+////////////////////////////////////////////
+///// Trend Meter
+////////////////////////////////////////////
+tm_group = "██████████ Trend Meter ██████████"
+
+ShowTrendBar = true
+
+WTSetups = input.bool(true, 'Wave Trend Filtered by Trend', group=tm_group, inline = 'tm')
+
+TMSetups = input.bool(true, 'All 3 Trend Meters Now Align', group=tm_group, inline = 'tm2')
+
+MSBar1 = 'Trend Filter'  // input(title= "1 - Wave Trend Signals",    defval = "Trend Filter",                             options = ["N/A", "Trend Filter", "Filter X", "Filter X + Trend Filter"])
+
+
+MSBar2 = 'Trend Filter'  // input(title= "2 - Wave Trend Signals",    defval = "Filter X",                                 options = ["N/A", "Trend Filter", "Filter X", "Filter X + Trend Filter"])
+
+
+
+TrendBar1 = input.string(title='Trend Meter 1', defval='MACD Crossover - Fast - 8, 21, 5', options=['MACD Crossover - 12, 26, 9', 'MACD Crossover - Fast - 8, 21, 5', 'Mom Dad Cross (Top Dog Trading)', 'RSI Signal Line Cross - RSI 13, Sig 21', 'RSI 13: > or < 50', 'RSI 5: > or < 50', 'Trend Candles', 'N/A'], group='Trend Meters')  // "MA Crossover", "DAD Direction (Top Dog Trading)",
+
+TrendBar2 = input.string(title='Trend Meter 2', defval='RSI 13: > or < 50', options=['MACD Crossover - 12, 26, 9', 'MACD Crossover - Fast - 8, 21, 5', 'Mom Dad Cross (Top Dog Trading)', 'RSI Signal Line Cross - RSI 13, Sig 21', 'RSI 13: > or < 50', 'RSI 5: > or < 50', 'Trend Candles', 'N/A'], group='Trend Meters')  // "MA Crossover", "DAD Direction (Top Dog Trading)",
+
+TrendBar3 = input.string(title='Trend Meter 3', defval='RSI 5: > or < 50', options=['MACD Crossover - 12, 26, 9', 'MACD Crossover - Fast - 8, 21, 5', 'Mom Dad Cross (Top Dog Trading)', 'RSI Signal Line Cross - RSI 13, Sig 21', 'RSI 13: > or < 50', 'RSI 5: > or < 50', 'Trend Candles', 'N/A'], group='Trend Meters')  // "MA Crossover", "DAD Direction (Top Dog Trading)",
+
+TrendBar4 = input.string(title='Trend Bar 1', defval='MA Crossover', options=['MA Crossover', 'MA Direction - Fast MA - TB1', 'MA Direction - Slow MA - TB1', 'N/A'], group='Trend Bars')  //  "MACD Crossover - 12, 26 9", "MACD Crossover - Fast - 8, 21, 5", "DAD Direction (Top Dog Trading)",
+
+TrendBar5 = input.string(title='Trend Bar 2', defval='MA Crossover', options=['MA Crossover', 'MA Direction - Fast MA - TB2', 'MA Direction - Slow MA - TB2', 'N/A'], group='Trend Bars')  //  "MACD Crossover - 12, 26 9", "MACD Crossover - Fast - 8, 21, 5", "DAD Direction (Top Dog Trading)",
+
+
+////////////////Signals - Wave Trend/////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Wave Trend - RSI
+
+RSIMC = ta.rsi(close, 14)
+
+// Wave Trend
+
+ap = hlc3  // input(hlc3, "Wave Trend - Source")
+n1 = 9  //input(9,    "Wave Trend - WT Channel Length")
+n2 = 12  // input(12,   "Wave Trend - WT Average Length")
+esa = ta.ema(ap, n1)
+de = ta.ema(math.abs(ap - esa), n1)
+ci = (ap - esa) / (0.015 * de)
+tci = ta.ema(ci, n2)
+wt11 = tci
+wt22 = ta.sma(wt11, 3)
+
+// Wave Trend - Overbought & Oversold lines
+
+obLevel2 = 60  // input( 60,  "Wave Trend - WT Very Overbought")
+obLevel = 50  // input( 50,  "Wave Trend - WT Overbought")
+osLevel = -50  // input(-50,  "Wave Trend - WT Oversold")
+osLevel2 = -60  // input(-60,  "Wave Trend - WT Very Oversold")
+
+// Wave Trend - Conditions
+
+WTCross = ta.cross(wt11, wt22)
+WTCrossUp = wt22 - wt11 <= 0
+WTCrossDown = wt22 - wt11 >= 0
+WTOverSold = wt22 <= osLevel2
+WTOverBought = wt22 >= obLevel2
+
+
+// MA Inputs
+
+MA1_Length = input.int(5, title='Fast MA', minval=1, group='Trend Bar 1 - Settings', inline='TB1 Fast')
+MA1_Type = input.string(title='', defval='EMA', options=['EMA', 'SMA'], group='Trend Bar 1 - Settings', inline='TB1 Fast')
+
+MA2_Length = input.int(11, title='Slow MA', minval=1, group='Trend Bar 1 - Settings', inline='TB1 Slow')
+MA2_Type = input.string(title='', defval='EMA', options=['EMA', 'SMA'], group='Trend Bar 1 - Settings', inline='TB1 Slow')
+
+MA3_Length = input.int(9, title='Fast MA', minval=1, group='Trend Bar 2 - Settings', inline='TB2 Fast')
+MA3_Type = input.string(title='', defval='EMA', options=['EMA', 'SMA'], group='Trend Bar 2 - Settings', inline='TB2 Fast')
+
+MA4_Length = input.int(21, title='Slow MA', minval=1, group='Trend Bar 2 - Settings', inline='TB2 Slow')
+MA4_Type = input.string(title='', defval='SMA', options=['EMA', 'SMA'], group='Trend Bar 2 - Settings', inline='TB2 Slow')
+
+
+// MA Calculations
+
+Close = request.security(syminfo.tickerid, timeframe.period, close, lookahead=barmerge.lookahead_on)
+
+
+MA1 = if MA1_Type == 'SMA'
+    ta.sma(Close, MA1_Length)
+else
+    ta.ema(Close, MA1_Length)
+
+
+MA2 = if MA2_Type == 'SMA'
+    ta.sma(Close, MA2_Length)
+else
+    ta.ema(Close, MA2_Length)
+
+
+MA3 = if MA3_Type == 'SMA'
+    ta.sma(Close, MA3_Length)
+else
+    ta.ema(Close, MA3_Length)
+
+
+MA4 = if MA4_Type == 'SMA'
+    ta.sma(Close, MA4_Length)
+else
+    ta.ema(Close, MA4_Length)
+
+
+// MA Crossover Condition
+
+MACrossover1 = MA1 > MA2 ? 1 : 0
+
+MACrossover2 = MA3 > MA4 ? 1 : 0
+
+// MA Direction Condition
+
+MA1Direction = MA1 > MA1[1] ? 1 : 0
+
+MA2Direction = MA2 > MA2[1] ? 1 : 0
+
+MA3Direction = MA3 > MA3[1] ? 1 : 0
+
+MA4Direction = MA4 > MA4[1] ? 1 : 0
+
+// MA Direction Change Condition
+
+MA1PositiveDirectionChange = MA1Direction and not MA1Direction[1] ? 1 : 0
+
+MA2PositiveDirectionChange = MA2Direction and not MA2Direction[1] ? 1 : 0
+
+MA3PositiveDirectionChange = MA3Direction and not MA3Direction[1] ? 1 : 0
+
+MA4PositiveDirectionChange = MA4Direction and not MA4Direction[1] ? 1 : 0
+
+
+MA1NegativeDirectionChange = not MA1Direction and MA1Direction[1] ? 1 : 0
+
+MA2NegativeDirectionChange = not MA2Direction and MA2Direction[1] ? 1 : 0
+
+MA3NegativeDirectionChange = not MA3Direction and MA3Direction[1] ? 1 : 0
+
+MA4NegativeDirectionChange = not MA4Direction and MA4Direction[1] ? 1 : 0
+
+
+// MACD and MOM & DAD - Top Dog Trading
+
+// Standard MACD Calculations
+
+MACDfastMA = 12
+MACDslowMA = 26
+MACDsignalSmooth = 9
+
+
+MACDLine = ta.ema(close, MACDfastMA) - ta.ema(close, MACDslowMA)
+
+SignalLine = ta.ema(MACDLine, MACDsignalSmooth)
+
+MACDHistogram = MACDLine - SignalLine
+
+
+// MACD- Background Color Change Condition
+
+MACDHistogramCross = MACDHistogram > 0 ? 1 : 0
+
+MACDLineOverZero = MACDLine > 0 ? 1 : 0
+
+MACDLineOverZeroandHistogramCross = MACDHistogramCross and MACDLineOverZero ? 1 : 0
+
+MACDLineUnderZeroandHistogramCross = not MACDHistogramCross and not MACDLineOverZero ? 1 : 0
+
+
+// Fast MACD Calculations
+
+FastMACDfastMA = 8
+FastMACDslowMA = 21
+FastMACDsignalSmooth = 5
+
+
+FastMACDLine = ta.ema(close, FastMACDfastMA) - ta.ema(close, FastMACDslowMA)
+
+FastSignalLine = ta.ema(FastMACDLine, FastMACDsignalSmooth)
+
+FastMACDHistogram = FastMACDLine - FastSignalLine
+
+// Fast MACD- Background Color Change Condition
+
+FastMACDHistogramCross = FastMACDHistogram > 0 ? 1 : 0
+
+FastMACDLineOverZero = FastMACDLine > 0 ? 1 : 0
+
+FastMACDLineOverZeroandHistogramCross = FastMACDHistogramCross and FastMACDLineOverZero ? 1 : 0
+
+FastMACDLineUnderZeroandHistogramCross = not FastMACDHistogramCross and not FastMACDLineOverZero ? 1 : 0
+
+
+// Top Dog Trading - Mom Dad Calculations
+
+TopDog_Fast_MA = 5
+TopDog_Slow_MA = 20
+TopDog_Sig = 30
+
+
+TopDogMom = ta.ema(close, TopDog_Fast_MA) - ta.ema(close, TopDog_Slow_MA)
+
+TopDogDad = ta.ema(TopDogMom, TopDog_Sig)
+
+// Top Dog Dad - Background Color Change Condition
+
+TopDogDadDirection = TopDogDad > TopDogDad[1] ? 1 : 0
+
+TopDogMomOverDad = TopDogMom > TopDogDad ? 1 : 0
+
+TopDogMomOverZero = TopDogMom > 0 ? 1 : 0
+
+
+
+
+////// Trend Barmeter Calculations //////
+
+
+haclose_tm = ohlc4
+haopen_tm = 0.0
+haopen_tm := na(haopen_tm[1]) ? (open + close) / 2 : (haopen_tm[1] + haclose_tm[1]) / 2
+
+
+
+// RSI 5 Trend Barmeter Calculations
+
+RSI5 = ta.rsi(close, 5)
+
+RSI5Above50 = RSI5 > 50 ? 1 : 0
+
+
+
+// RSI 5 Trend Barmeter Calculations
+
+RSI13 = ta.rsi(close, 13)
+
+
+// Linear Regression Calculation For RSI Signal Line
+
+SignalLineLength1 = 21
+
+x = bar_index
+y = RSI13
+x_ = ta.sma(x, SignalLineLength1)
+y_ = ta.sma(y, SignalLineLength1)
+mx = ta.stdev(x, SignalLineLength1)
+my = ta.stdev(y, SignalLineLength1)
+c = ta.correlation(x, y, SignalLineLength1)
+slope = c * (my / mx)
+inter = y_ - slope * x_
+LinReg1 = x * slope + inter
+
+
+RSISigDirection = LinReg1 > LinReg1[1] ? 1 : 0
+
+RSISigCross = RSI13 > LinReg1 ? 1 : 0
+
+RSI13Above50 = RSI13 > 50 ? 1 : 0
+
+
+
+
+
+TrendBar1Result = TrendBar1 == 'MA Crossover' ? MACrossover1 : TrendBar1 == 'MACD Crossover - 12, 26, 9' ? MACDHistogramCross : TrendBar1 == 'MACD Crossover - Fast - 8, 21, 5' ? FastMACDHistogramCross : TrendBar1 == 'Mom Dad Cross (Top Dog Trading)' ? TopDogMomOverDad : TrendBar1 == 'DAD Direction (Top Dog Trading)' ? TopDogDadDirection : TrendBar1 == 'RSI Signal Line Cross - RSI 13, Sig 21' ? RSISigCross : TrendBar1 == 'RSI 5: > or < 50' ? RSI5Above50 : TrendBar1 == 'RSI 13: > or < 50' ? RSI13Above50 :  na
+
+TrendBar2Result = TrendBar2 == 'MA Crossover' ? MACrossover1 : TrendBar2 == 'MACD Crossover - 12, 26, 9' ? MACDHistogramCross : TrendBar2 == 'MACD Crossover - Fast - 8, 21, 5' ? FastMACDHistogramCross : TrendBar2 == 'Mom Dad Cross (Top Dog Trading)' ? TopDogMomOverDad : TrendBar2 == 'DAD Direction (Top Dog Trading)' ? TopDogDadDirection : TrendBar2 == 'RSI Signal Line Cross - RSI 13, Sig 21' ? RSISigCross : TrendBar2 == 'RSI 5: > or < 50' ? RSI5Above50 : TrendBar2 == 'RSI 13: > or < 50' ? RSI13Above50 :  na
+
+TrendBar3Result = TrendBar3 == 'MA Crossover' ? MACrossover1 : TrendBar3 == 'MACD Crossover - 12, 26, 9' ? MACDHistogramCross : TrendBar3 == 'MACD Crossover - Fast - 8, 21, 5' ? FastMACDHistogramCross : TrendBar3 == 'Mom Dad Cross (Top Dog Trading)' ? TopDogMomOverDad : TrendBar3 == 'DAD Direction (Top Dog Trading)' ? TopDogDadDirection : TrendBar3 == 'RSI Signal Line Cross - RSI 13, Sig 21' ? RSISigCross : TrendBar3 == 'RSI 5: > or < 50' ? RSI5Above50 : TrendBar3 == 'RSI 13: > or < 50' ? RSI13Above50 : na
+
+
+
+
+FilterXUp = FastMACDHistogramCross and ta.ema(close, 15) > ta.ema(close, 15)[1]
+
+FilterXDown = not FastMACDHistogramCross and ta.ema(close, 15) < ta.ema(close, 15)[1]
+
+
+
+TrendFilterPlus = ta.ema(close, 15) > ta.ema(close, 20) and ta.ema(close, 20) > ta.ema(close, 30) and ta.ema(close, 30) > ta.ema(close, 40) and ta.ema(close, 40) > ta.ema(close, 50) ? 1 : 0
+
+TrendFilterMinus = ta.ema(close, 15) < ta.ema(close, 20) and ta.ema(close, 20) < ta.ema(close, 30) and ta.ema(close, 30) < ta.ema(close, 40) and ta.ema(close, 40) < ta.ema(close, 50) ? 1 : 0
+
+
+
+
+MSBar1PositiveWaveTrendSignal = MSBar1 == 'Filter X' ? FilterXUp and WTCross and WTCrossUp : MSBar1 == 'Trend Filter' ? TrendFilterPlus and WTCross and WTCrossUp : MSBar1 == 'Filter X + Trend Filter' ? FilterXUp and TrendFilterPlus and WTCross and WTCrossUp : WTCross and WTCrossUp
+MSBar1NegativeWaveTrendSignal = MSBar1 == 'Filter X' ? FilterXDown and WTCross and WTCrossDown : MSBar1 == 'Trend Filter' ? TrendFilterMinus and WTCross and WTCrossDown : MSBar1 == 'Filter X + Trend Filter' ? FilterXDown and TrendFilterMinus and WTCross and WTCrossDown : WTCross and WTCrossDown
+
+MSBar2PositiveWaveTrendSignal = MSBar2 == 'Filter X' ? FilterXUp and WTCross and WTCrossUp : MSBar2 == 'Trend Filter' ? TrendFilterPlus and WTCross and WTCrossUp : MSBar2 == 'Filter X + Trend Filter' ? FilterXUp and TrendFilterPlus and WTCross and WTCrossUp : WTCross and WTCrossUp
+MSBar2NegativeWaveTrendSignal = MSBar2 == 'Filter X' ? FilterXDown and WTCross and WTCrossDown : MSBar2 == 'Trend Filter' ? TrendFilterMinus and WTCross and WTCrossDown : MSBar2 == 'Filter X + Trend Filter' ? FilterXDown and TrendFilterMinus and WTCross and WTCrossDown : WTCross and WTCrossDown
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+CrossoverType2 = TrendBar4 == 'DAD Direction (Top Dog Trading)' ? TopDogDadDirection : TrendBar4 == 'MACD Crossover' ? MACDHistogramCross : TrendBar4 == 'MA Direction - Fast MA - TB1' ? MA1Direction : TrendBar4 == 'MA Direction - Slow MA - TB1' ? MA2Direction : MACrossover1
+
+
+CrossoverType3 = TrendBar5 == 'DAD Direction (Top Dog Trading)' ? TopDogDadDirection : TrendBar5 == 'MACD Crossover' ? MACDHistogramCross : TrendBar5 == 'MA Direction - Fast MA - TB2' ? MA3Direction : TrendBar5 == 'MA Direction - Slow MA - TB2' ? MA4Direction : MACrossover2
+
+
+
+
+
+MaxValueMACrossUp = ta.crossover(ta.ema(Close, 5), ta.ema(Close, 11))
+MaxValueMACrossDown = ta.crossunder(ta.ema(Close, 5), ta.ema(Close, 11))
+
+TB1MACrossUp = ta.crossover(MA1, MA2)
+TB1MACrossDown = ta.crossunder(MA1, MA2)
+
+
+
+TB2MACrossUp = ta.crossover(MA3, MA4)
+TB2MACrossDown = ta.crossunder(MA3, MA4)
+
+
+TB1Green = MA1 > MA2
+TB1Red = MA1 < MA2
+
+TB2Green = MA3 > MA4
+TB2Red = MA3 < MA4
+
+TB12Green = TB1Green and TB2Green and (TB1MACrossUp or TB2MACrossUp)
+TB12Red = TB1Red and TB2Red and (TB1MACrossDown or TB2MACrossDown)
+
+
+
+/////////////////////////////////
+/////// Stochastic
+/////////////////////////////////
+groupname = "██████████ Stochastic ██████████"
+len = input.int(14, minval=1, title="Length",group=groupname) 
+smoothK = input.int(3, minval=1, title="K Smoothing",group=groupname)
+smoothD = input.int(3, minval=1, title="D Smoothing",group=groupname)
+upLine = input.int(80, minval=50, maxval=90, title="Overbought level",group=groupname)
+lowLine = input.int(20, minval=10, maxval=50, title="Oversold level",group=groupname)
+
+//Resolutioon for MTF
+resstoch = timeframe.period
+//Stoch formula
+kk = ta.sma(ta.stoch(close, high, low, len), smoothK)
+dd = ta.sma(kk, smoothD)
+outK = request.security(syminfo.tickerid, resstoch, kk)
+outD = request.security(syminfo.tickerid, resstoch, dd)
+
+//definitions for Cross
+aboveLine = outK > upLine ? 1 : 0
+belowLine = outK < lowLine ? 1 : 0
+stoch_long = bool (na)
+stoch_short = bool (na)
+if stochtype == "CrossOver"
+    stoch_long := (outK[1] < outD[1] and outK > outD) ? 1 : 0
+    stoch_short := (outK[1] > outD[1] and outK < outD) ? 1 : 0
+else if stochtype == "CrossOver in OB & OS levels"
+    stoch_long := (outK[1] < outD[1] and outK[1] < lowLine[1]) and (outK > outD) and outK > lowLine? 1 : 0
+    stoch_short := (outK[1] > outD[1] and outK[1] > upLine[1]) and (outK < outD) and outK < upLine? 1 : 0
+else if stochtype == "%K above/below %D"
+    stoch_long := outK > outD
+    stoch_short := outK < outD
+
+
+
+
+///////////////////////////////////////////////
+///////RSI
+///////////////////////////////////////////////
+
+rsi_group = "█████████████████ RSI  █████████████████"
+
+rsiLengthInput = input.int(14, minval=1, title="RSI Length", group=rsi_group)
+rsiSourceInput = input.source(close, "Source", group=rsi_group)
+maTypeInput = input.string("SMA", title="MA Type", options=["SMA", "Bollinger Bands", "EMA", "SMMA (RMA)", "WMA", "VWMA"], group=rsi_group)
+rsi_upper = input.int(defval=80, title='Overbought Zone', group=rsi_group, inline='zone')
+rsi_lower = input.int(defval=20, title='Oversold Zone', group=rsi_group, inline='zone')
+
+respectrsilevel = input.int(defval=50, minval=1, title='RSI MidLine', group=rsi_group)
+maLengthInput = input.int(14, title="MA Length", group=rsi_group)
+
+up = ta.rma(math.max(ta.change(rsiSourceInput), 0), rsiLengthInput)
+down = ta.rma(-math.min(ta.change(rsiSourceInput), 0), rsiLengthInput)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+rsiMA = ma(rsi, maLengthInput, maTypeInput)
+isBB = maTypeInput == "Bollinger Bands"
+
+
+
+
+///////////////////////////////////////////////
+/// HULL SUITE
+//////////////////////////////////////////////
+hull_group = "██████████ HullSuite ██████████"
+//INPUT
+hullsrc = input(close, title='Source',group=hull_group)
+modeSwitch = input.string('Hma', title='Hull Variation', options=['Hma', 'Thma', 'Ehma'],group=hull_group)
+hull_length = input(55, title='hull_length(180-200 for floating S/R , 55 for swing entry)',group=hull_group)
+hull_lengthMult = input(1.0, title='hull_length multiplier (Used to view higher timeframes with straight band)',group=hull_group)
+
+useHtf = input(false, title='Show Hull MA from X timeframe? (good for scalping)',group=hull_group)
+htf = input.timeframe('240', title='Higher timeframe',group=hull_group)
+
+
+
+//FUNCTIONS
+//HMA
+HMA(_hullsrc, _hull_length) =>
+    ta.wma(2 * ta.wma(_hullsrc, _hull_length / 2) - ta.wma(_hullsrc, _hull_length), math.round(math.sqrt(_hull_length)))
+//EHMA    
+EHMA(_hullsrc, _hull_length) =>
+    ta.ema(2 * ta.ema(_hullsrc, _hull_length / 2) - ta.ema(_hullsrc, _hull_length), math.round(math.sqrt(_hull_length)))
+//THMA    
+THMA(_hullsrc, _hull_length) =>
+    ta.wma(ta.wma(_hullsrc, _hull_length / 3) * 3 - ta.wma(_hullsrc, _hull_length / 2) - ta.wma(_hullsrc, _hull_length), _hull_length)
+
+//SWITCH
+Mode(modeSwitch, hullsrc, len) =>
+    modeSwitch == 'Hma' ? HMA(hullsrc, len) : modeSwitch == 'Ehma' ? EHMA(hullsrc, len) : modeSwitch == 'Thma' ? THMA(hullsrc, len / 2) : na
+
+//OUT
+_hull = Mode(modeSwitch, hullsrc, int(hull_length * hull_lengthMult))
+HULL = useHtf ? request.security(syminfo.ticker, htf, _hull) : _hull
+MHULL = HULL[0]
+SHULL = HULL[2]
+
+//COLOR
+// hullColor = switchColor ? HULL > HULL[2] ? #00ff00 : #ff0000 : #ff9800
+
+
+
+/////////////////////////
+/// STC overlay signal
+/////////////////////////
+stc_group = "██████████ Schaff Trend Cycle (STC) ██████████"
+fastLength = input(title='MACD Fast Length', defval=23, group=stc_group)
+slowLength = input(title='MACD Slow Length', defval=50, group=stc_group)
+cycleLength = input(title='Cycle Length', defval=10, group=stc_group)
+d1Length = input(title='1st %D Length', defval=3, group=stc_group)
+d2Length = input(title='2nd %D Length', defval=3, group=stc_group)
+srcstc = input(title='Source', defval=close, group=stc_group)
+upper = input(title='Upper Band', defval=75, group=stc_group)
+lower = input(title='Lower Band', defval=25, group=stc_group)
+v_show_last  = input(2000,  "Plotting Length", group=stc_group)
+
+macd = ta.ema(srcstc, fastLength) - ta.ema(srcstc, slowLength)
+k = nz(fixnan(ta.stoch(macd, macd, macd, cycleLength)))
+d = ta.ema(k, d1Length)
+kd = nz(fixnan(ta.stoch(d, d, d, cycleLength)))
+stc = ta.ema(kd, d2Length)
+stc := math.max(math.min(stc, 100), 0)
+
+stcColor1 = stc > stc[1] ? color.green : color.red
+stcColor2 = stc > upper ? color.green : stc <= lower ? color.red : color.orange
+
+
+upperCrossover = ta.crossover(stc, upper)
+upperCrossunder = ta.crossunder(stc, upper)
+lowerCrossover = ta.crossover(stc, lower)
+lowerCrossunder = ta.crossunder(stc, lower)
+stcup = stc >= upper
+stcdown = stc <= lower
+
+
+plotshape(stcdown and switch_stc? true :na, style=shape.circle, location=location.top , show_last = v_show_last, color=color.new(color.red, 0), title='STC Sell')
+plotshape(stcup and switch_stc? true:na, style=shape.circle, location=location.top, show_last = v_show_last, color=color.new(color.green, 0), title='STC Buy')
+
+
+
+//////////////////////////////////////////////////////
+//vector candles
+/////////////////////////////////////////////////////
+
+// Indicator Settings 
+
+pvsra_group="██████████ PVSRA ██████████"
+
+var overideCandleColours = input.bool(title='Override Candles with PVSRA Colour', defval=true, tooltip="Indicator must be dragged to the top of the Object Tree to display correctly", group=pvsra_group)
+
+var bool override_imnt = input.bool(defval=false, title="Overide Symbol", group=pvsra_group, inline="0")
+var string pvsra_sym = input.symbol(title="", defval="BINANCE:BTCUSDTPERP", group=pvsra_group, inline="0")
+
+var Bull200CandleColor = input.color(color.new(color.lime, 0), title="200% Volume", group=pvsra_group, inline="1")  
+var Bear200CandleColor = input.color(color.new(color.red, 0), title="", group=pvsra_group, inline = "1") 
+
+var Bull150CandleColor = input.color(color.new(color.blue, 0), title="150% Volume", group=pvsra_group, inline="2")   
+var Bear150CandleColor = input.color(color.new(color.fuchsia, 0), title="", group=pvsra_group, inline="2")  
+
+var BullNormCandleColor = input.color(color.new(#999999, 0), title="Norm Volume", group=pvsra_group, inline="3")
+var BearNormCandleColor = input.color(color.new(#4d4d4d, 0), title="", group=pvsra_group, inline="3")
+
+
+var color candleColor = na
+var color imbalanceColor = na
+var color imbalancedLineColor = na
+
+var color NO_COLOR = na
+
+
+var bool chartIs120MinOrMore = false 
+
+
+
+
+// Logic to reference another Instruments Volume Profile
+
+
+pvsra_imnt(sresolution,sseries) => request.security(override_imnt ? pvsra_sym : syminfo.tickerid ,sresolution,sseries, barmerge.gaps_off,barmerge.lookahead_off)
+volume_imnt = override_imnt == true? pvsra_imnt("",volume): volume
+high_imnt = override_imnt == true? pvsra_imnt("",high): high
+low_imnt = override_imnt == true? pvsra_imnt("",low): low
+close_imnt = override_imnt == true? pvsra_imnt("",close): close
+open_imnt = override_imnt == true? pvsra_imnt("",open): open
+
+
+
+av = ta.sma(volume_imnt, 10)//sum_2 = math.sum(volume, 10)
+value2 = volume_imnt * (high_imnt - low_imnt) 
+hivalue2 = ta.highest(value2, 10)
+imnt_override_pvsra_calc_part2 = volume_imnt >= av * 1.5 ? 2 : 0
+va = volume_imnt >= av * 2 or value2 >= hivalue2 ? 1 : imnt_override_pvsra_calc_part2
+
+
+// Bull or bear Candle Colors
+isBull =  close_imnt > open_imnt 
+
+
+var bool is200Bull = na
+var bool is150Bull = na
+var bool is100Bull = na
+var bool is200Bear = na
+var bool is150Bear = na
+var bool is100Bear = na
+
+
+if isBull
+    if va == 1
+        candleColor := Bull200CandleColor
+        is200Bull := true
+    else 
+        if va == 2 
+            candleColor := Bull150CandleColor
+            is150Bull := true
+        else 
+            is200Bull := false
+            is150Bull := false
+            candleColor := BullNormCandleColor
+            imbalanceColor := na
+            imbalancedLineColor := na
+else
+    if va == 1
+        candleColor := Bear200CandleColor 
+        is200Bear := true
+    else
+        if va == 2
+            candleColor := Bear150CandleColor
+            is150Bear := true
+        else 
+            is200Bear := false
+            is150Bear := false
+            candleColor := BearNormCandleColor
+            imbalanceColor := na
+            imbalancedLineColor := na
+ 
+barcolor(overideCandleColours and switch_pvsra ? candleColor : NO_COLOR)
+plotcandle(open, high, low, close, color=(overideCandleColours and switch_pvsra ? candleColor : NO_COLOR), wickcolor=(overideCandleColours and switch_pvsra? candleColor : NO_COLOR), bordercolor=(overideCandleColours and switch_pvsra? candleColor : NO_COLOR), display = display.all)
+
+
+///////////////////////////////////////////////////
+//////// SUpply/Demand POI
+//////////////////////////////////////////////////
+//      INDICATOR SETTINGS
+poi_group = '██████████ Supply/Demand Zone ██████████'
+swing_length = input.int(10, title = 'Swing High/Low Length', group = poi_group, minval = 1, maxval = 50)
+history_of_demand_to_keep = input.int(20, title = 'History To Keep', minval = 5, maxval = 50, group = poi_group)
+box_width = input.float(2.5, title = 'Supply/Demand Box Width', group = poi_group, minval = 1, maxval = 10, step = 0.5)
+
+//      INDICATOR VISUAL SETTINGS
+show_zigzag = input.bool(false, title = 'Show Zig Zag', group = 'Visual Settings', inline = '1')
+show_price_action_labels = input.bool(false, title = 'Show Price Action Labels', group = 'Visual Settings', inline = '2')
+
+supply_color = input.color(color.new(#EDEDED,70), title = 'Supply', group = 'Visual Settings', inline = '3')
+supply_outline_color = input.color(color.new(color.white,100), title = 'Outline', group = 'Visual Settings', inline = '3')
+
+demand_color = input.color(color.new(#00FFFF,70), title = 'Demand', group = 'Visual Settings', inline = '4')
+demand_outline_color = input.color(color.new(color.white,100), title = 'Outline', group = 'Visual Settings', inline = '4')
+
+
+poi_label_color = input.color(color.white, title = 'POI Label', group = 'Visual Settings', inline = '7')
+
+swing_type_color = input.color(color.black, title = 'Price Action Label', group = 'Visual Settings', inline = '8')
+zigzag_color = input.color(color.new(#000000,0), title = 'Zig Zag', group = 'Visual Settings', inline = '9')
+
+//
+//END SETTINGS
+//
+
+atrpoi = ta.atr(50)
+//
+//FUNCTIONS
+//
+
+//      FUNCTION TO ADD NEW AND REMOVE LAST IN ARRAY
+f_array_add_pop(array, new_value_to_add) =>
+    array.unshift(array, new_value_to_add)
+    array.pop(array)
+
+//      FUNCTION SWING H & L LABELS
+f_sh_sl_labels(array, swing_type) =>
+
+    var string label_text = na
+    if swing_type == 1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HH'
+        else
+            label_text := 'LH'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_down, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+    
+    else if swing_type == -1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HL'
+        else
+            label_text := 'LL'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_up, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+
+//      FUNCTION MAKE SURE SUPPLY ISNT OVERLAPPING
+f_check_overlapping(new_poi, box_array, atrpoi) =>
+
+    atr_threshold = atrpoi * 2
+    okay_to_draw = true
+
+    for i = 0 to array.size(box_array) - 1
+        top = box.get_top(array.get(box_array, i))
+        bottom = box.get_bottom(array.get(box_array, i))
+        poi = (top + bottom) / 2
+
+        upper_boundary = poi + atr_threshold
+        lower_boundary = poi - atr_threshold
+
+        if new_poi >= lower_boundary and new_poi <= upper_boundary
+            okay_to_draw := false
+            break
+        else 
+            okay_to_draw := true
+    okay_to_draw
+
+
+//      FUNCTION TO DRAW SUPPLY OR DEMAND ZONE
+f_supply_demand(value_array, bn_array, box_array, label_array, box_type, atrpoi) =>
+
+    atr_buffer = atrpoi * (box_width / 10)
+    box_left = array.get(bn_array, 0)
+    box_right = bar_index
+
+    var float box_top = 0.00
+    var float box_bottom = 0.00
+    var float poi = 0.00
+
+
+    if box_type == 1
+        box_top := array.get(value_array, 0)
+        box_bottom := box_top - atr_buffer
+        poi := (box_top + box_bottom) / 2
+    else if box_type == -1
+        box_bottom := array.get(value_array, 0)
+        box_top := box_bottom + atr_buffer
+        poi := (box_top + box_bottom) / 2
+
+    okay_to_draw = f_check_overlapping(poi, box_array, atrpoi)
+    // okay_to_draw = true
+
+    //delete oldest box, and then create a new box and add it to the array
+    if box_type == 1 and okay_to_draw and switch_poi
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = supply_outline_color,
+             bgcolor = supply_color, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90),
+             bgcolor = color.new(poi_label_color,90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+
+    else if box_type == -1 and okay_to_draw  and switch_poi
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = demand_outline_color,
+             bgcolor = demand_color, extend = extend.right,  text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90),
+             bgcolor = color.new(poi_label_color,90), extend = extend.right,  text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+
+
+//      FUNCTION TO CHANGE SUPPLY/DEMAND TO A BOS IF BROKEN
+f_sd_to_bos(box_array, bos_array, label_array, zone_type) =>
+
+    if zone_type == 1  and switch_poi
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_top(array.get(box_array,i))
+            // if ta.crossover(close, level_to_break)
+            if close >= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), '' )
+                box.set_text_color( array.get(bos_array,0), color.new(color.white, 0))
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+
+
+    if zone_type == -1  and switch_poi
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_bottom(array.get(box_array,i))
+            // if ta.crossunder(close, level_to_break)
+            if close <= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), '' )
+                box.set_text_color( array.get(bos_array,0),  color.new(color.white, 0))
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+
+
+
+//      FUNCTION MANAGE CURRENT BOXES BY CHANGING ENDPOINT
+f_extend_box_endpoint(box_array) =>
+
+    for i = 0 to array.size(box_array) - 1
+        box.set_right(array.get(box_array, i), bar_index + 100)
+
+
+
+
+
+//      CALCULATE SWING HIGHS & SWING LOWS
+swing_high = ta.pivothigh(high, swing_length, swing_length)
+swing_low = ta.pivotlow(low, swing_length, swing_length)
+
+//      ARRAYS FOR SWING H/L & BN 
+var swing_high_values = array.new_float(5,0.00)
+var swing_low_values = array.new_float(5,0.00)
+
+var swing_high_bns = array.new_int(5,0)
+var swing_low_bns = array.new_int(5,0)
+
+//      ARRAYS FOR SUPPLY / DEMAND
+var current_supply_box = array.new_box(history_of_demand_to_keep, na)
+var current_demand_box = array.new_box(history_of_demand_to_keep, na)
+
+//      ARRAYS FOR SUPPLY / DEMAND POI LABELS
+var current_supply_poi = array.new_box(history_of_demand_to_keep, na)
+var current_demand_poi = array.new_box(history_of_demand_to_keep, na)
+
+//      ARRAYS FOR BOS
+var supply_bos = array.new_box(5, na)
+var demand_bos = array.new_box(5, na)
+//
+//END CALCULATIONS
+//
+
+//      NEW SWING HIGH
+if not na(swing_high)
+
+    //MANAGE SWING HIGH VALUES
+    f_array_add_pop(swing_high_values, swing_high)
+    f_array_add_pop(swing_high_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_high_values, 1)
+
+    f_supply_demand(swing_high_values, swing_high_bns, current_supply_box, current_supply_poi, 1, atrpoi)
+
+//      NEW SWING LOW
+else if not na(swing_low)
+
+    //MANAGE SWING LOW VALUES
+    f_array_add_pop(swing_low_values, swing_low)
+    f_array_add_pop(swing_low_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_low_values, -1)
+    
+    f_supply_demand(swing_low_values, swing_low_bns, current_demand_box, current_demand_poi, -1, atrpoi)
+
+
+f_sd_to_bos(current_supply_box, supply_bos, current_supply_poi, 1)
+f_sd_to_bos(current_demand_box, demand_bos, current_demand_poi, -1)
+
+f_extend_box_endpoint(current_supply_box)
+f_extend_box_endpoint(current_demand_box)
+
+//ZIG ZAG
+h = ta.highest(high, swing_length * 2 + 1)
+l = ta.lowest(low, swing_length * 2 + 1)
+f_isMin(len) =>
+    l == low[len]
+f_isMax(len) =>
+    h == high[len]
+
+var dirUp = false
+var lastLow = high * 100
+var lastHigh = 0.0
+var timeLow = bar_index
+var timeHigh = bar_index
+var line li = na
+
+f_drawLine() =>
+    _li_color = show_zigzag and switch_poi ? zigzag_color : color.new(#ffffff,100)
+    line.new(timeHigh - swing_length, lastHigh, timeLow - swing_length, lastLow, xloc.bar_index, color=_li_color, width=2)
+
+if dirUp
+    if f_isMin(swing_length) and low[swing_length] < lastLow
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+
+    if f_isMax(swing_length) and high[swing_length] > lastLow
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        dirUp := false
+        li := f_drawLine()
+        li
+
+if not dirUp
+    if f_isMax(swing_length) and high[swing_length] > lastHigh
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+    if f_isMin(swing_length) and low[swing_length] < lastHigh
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        dirUp := true
+        li := f_drawLine()
+        if f_isMax(swing_length) and high[swing_length] > lastLow
+            lastHigh := high[swing_length]
+            timeHigh := bar_index
+            dirUp := false
+            li := f_drawLine()
+            li
