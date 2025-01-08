@@ -1,0 +1,246 @@
+var int leadinglong_count = 0
+var int leadinglong_count2 = 0
+
+var int leadingshort_count = 0
+var int leadingshort_count2 = 0
+
+
+if leadinglongcond
+    leadinglong_count := leadinglong_count + 1
+    leadinglong_count2 := leadinglong_count
+
+for i = 1 to 100
+    if leadinglongcond[i]
+        leadinglong_count := leadinglong_count + 1
+        leadinglong_count2 := leadinglong_count
+
+    else
+        leadinglong_count := 0
+        break
+
+
+if leadingshortcond
+    leadingshort_count := leadingshort_count + 1
+    leadingshort_count2 := leadingshort_count
+
+for i = 1 to 100
+    if leadingshortcond[i]
+        leadingshort_count := leadingshort_count + 1
+        leadingshort_count2 := leadingshort_count
+
+    else
+        leadingshort_count := 0
+        break
+
+CondIni = 0
+
+longCondition = bool (na)
+shortCondition = bool(na)
+
+
+
+
+// if expiry option is used
+longcond_withexpiry = longCond and leadinglong_count2 <= signalexpiry
+shortcond_withexpiry = shortCond and leadingshort_count2 <= signalexpiry
+
+log.info("leadinglong_count2 : {0}",leadinglong_count2)
+log.info("leadingshort_count2: {0}",leadingshort_count2)
+//without expiry
+longCondition := longcond_withexpiry and CondIni[1] == -1 
+shortCondition := shortcond_withexpiry and CondIni[1] == 1
+
+
+
+if alternatesignal
+    longCondition := longcond_withexpiry and CondIni[1] == -1  
+    shortCondition := shortcond_withexpiry and CondIni[1] == 1 
+
+else
+    longCondition := longcond_withexpiry  
+    shortCondition := shortcond_withexpiry 
+
+
+
+CondIni := longcond_withexpiry ? 1 : shortcond_withexpiry ? -1 : CondIni[1]
+
+
+is_expiry_count_crossed_long = leadinglong_count2 >= signalexpiry 
+is_expiry_count_crossed_short = leadingshort_count2 >= signalexpiry 
+
+ 
+
+
+
+plotshape(showsignal ? (longCondition[1] ? false : longCondition) : na, title='Buy Signal', text='long', textcolor=color.new(color.white, 0), style=shape.labelup, size=size.tiny, location=location.belowbar, color=color.new(color.green, 0))
+plotshape(showsignal and shortCondition and showsignal, title='Sell Signal', text='short', textcolor=color.new(color.white, 0), style=shape.labeldown, size=size.tiny, location=location.abovebar, color=color.new(color.red, 0))
+
+
+alertcondition(longCondition, title='Buy Alert', message='BUY')
+alertcondition(shortCondition, title='Sell Alert', message='SELL')
+
+
+ 
+rsitype2 = rsitype
+if rsitype2 == "RSI Level"
+    rsitype2 := "RSI Level (" + str.tostring(respectrsilevel) +")"
+
+
+confirmation_counter = array.new_string(0)
+confirmation_val = array.new_string(0)
+confirmation_val_short = array.new_string(0)
+
+
+
+
+
+pushConfirmation(respect, label, longCondition, shortCondition) =>
+    if respect
+        array.push(confirmation_counter, label)
+        array.push(confirmation_val, longCondition ? "✔️" : "❌")
+        array.push(confirmation_val_short, shortCondition ? "✔️" : "❌")
+
+pushConfirmation(respectema, "EMA", isaboverespectema, isbelowrespectema)
+pushConfirmation(respect2ma, "2 EMA Cross (" + str.tostring(respect2maperiod_1) + "," + str.tostring(respect2maperiod_2) + ")", ema2_long, ema2_short)
+pushConfirmation(respect3ma, "3 EMA Cross (" + str.tostring(respect3maperiod_1) + "," + str.tostring(respect3maperiod_2) + "," + str.tostring(respect3maperiod_3) + ")", ema3_long, ema3_short)
+pushConfirmation(respectrf, "Range Filter", uprf, downrf)
+pushConfirmation(respectrqk, "Rational Quadratic Kernel (RQK)", rqkuptrend, rqkdowntrend)
+pushConfirmation(respectst, "SuperTrend", isstup, isstdown)
+pushConfirmation(respectht, "Half Trend", halftrend_long, halftrend_short)
+ 
+pushConfirmation(respecttrendline_breakout, "Trendline breakout", tb_buysignal, tb_sellsignal)
+pushConfirmation(respectrd, "Range Detector", rd_long, rd_short)
+pushConfirmation(respecthacolt, "Heiken-Ashi Candlestick Oscillator", hacolt_long, hacolt_short)
+
+
+pushConfirmation(respectdonchian, "Donchian Trend Ribbon", donchian_long, donchian_short)
+pushConfirmation(respectroc, "Rate of Change (ROC)", roc_long, roc_short)
+pushConfirmation(respecttsi, "True Strength Indicator (TSI)", tsi_long, tsi_short)
+
+pushConfirmation(respecttdfi, "Trend Direction Force Index (TDFI)", tdfi_long, tdfi_short)
+
+
+pushConfirmation(respectbx, "B-Xtrender (" + str.tostring(bxtype) + ")", bx_long, bx_short)
+pushConfirmation(respectbbpt, "Bull Bear Power Trend (" + str.tostring(bbpttype) + ")", bbpt_long, bbpt_short)
+pushConfirmation(respectvwap, "VWAP", long_vwap, short_vwap)
+pushConfirmation(respectichi, "Ichimoku Cloud", ichi_long, ichi_short)
+pushConfirmation(respectsuperichi, "Superichi", superichi_long, superichi_short)
+pushConfirmation(respectbbosc, "BB Oscillator", bbosc_long, bbosc_short)
+pushConfirmation(respecttm, "Trend Meter", tmup, tmdown)
+pushConfirmation(respectce, "Chandelier Exit", ce_long, ce_short)
+pushConfirmation(respectcci, "CCI", ccilong, ccishort)
+pushConfirmation(respectadx, "DMI (Adx)  (" + str.tostring(adxtype) + ")", adxupcondition, adxdowncondition)
+pushConfirmation(respectsar, "Parabolic SAR", sarup, sardown)
+pushConfirmation(respectssl, "SSL Channel", ssl_long, ssl_short)
+pushConfirmation(respectvo, "Volatility Oscillator", vo_long, vo_short)
+pushConfirmation(respectdpo, "Detrended Price Oscillator(DPO)", dpo_long, dpo_short)
+pushConfirmation(respectmd, "McGinley Dynamic", md_long, md_short)
+
+pushConfirmation(respectdv, "DV", dvup, dvup) // Note: Both are 'dvup'. Double-check if it's intended.
+pushConfirmation(respectci, "Choppiness Index", ci_filter, ci_filter) // Note: Both are 'dvup'. Double-check if it's intended.
+
+pushConfirmation(respectstochastic, "Stochastic (" + str.tostring(stochtype) + ")", stoch_long, stoch_short)
+pushConfirmation(respectrsi, "RSI (" + str.tostring(rsitype2) + ")", rsiup, rsidown)
+pushConfirmation(respectmacd, "MACD (" + str.tostring(macdtype) + ")", ismacdup, ismacddown)
+pushConfirmation(respectstc, "Schaff Trend Cycle", stcup, stcdown)
+pushConfirmation(respectwae, "Waddah Attar Explosion", wae_long, wae_short)
+
+pushConfirmation(respectchaikin, "Chaikin Money Flow", chaikin_long, chaikin_short)
+pushConfirmation(respectvol, "Volume", longvol, shortvol)
+pushConfirmation(respectao, "Awesome Oscillator(" + str.tostring(aotype) + ")", ao_long, ao_short)
+pushConfirmation(respectwolf, "Wolfpack Id", wolf_long, wolf_short)
+pushConfirmation(respectqqe, "QQE Mod (" + str.tostring(qqetype) + ")", isqqeabove, isqqebelow)
+pushConfirmation(respecthull, "HullSuite", hullup, hulldown)
+pushConfirmation(respectvi, "Vortex Index  (" + str.tostring(vitype) + ")", vipcondition, vimcondition)
+
+
+
+getFalseShortConditionItems(arrShort) =>
+    sShort = ""
+    if array.size(arrShort) > 0
+        for i = 0 to array.size(arrShort) - 1
+            if array.get(arrShort, i) == "❌"
+                sShort := sShort + array.get(confirmation_counter, i) + "\n"
+    sShort
+
+falseShortConditionString = getFalseShortConditionItems(confirmation_val_short)
+
+tooltipS = "🔴 Failed Short Confirmations: " + "\n" + "--------------------------" + "\n" + falseShortConditionString
+
+labelShortCondition = showsignal and is_expiry_count_crossed_short and not is_expiry_count_crossed_short[1] and CondIni == 1
+
+if labelShortCondition
+    label.new(bar_index, low, "🔴", color=color.new(#dd1111, 0), textcolor=color.white, style=label.style_none, yloc=yloc.belowbar, size=size.small, tooltip=tooltipS)
+
+
+
+getFalseLongConditionItems(arr) =>
+    s = ""
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            if array.get(arr, i) == "❌"
+                s := s + array.get(confirmation_counter, i) + "\n"
+    s
+
+falseLongConditionString = getFalseLongConditionItems(confirmation_val)
+
+tooltipL = "🔴 Failed Long Confirmations: " + "\n" + "--------------------------" + "\n" + falseLongConditionString
+
+labelCondition = showsignal and is_expiry_count_crossed_long and not is_expiry_count_crossed_long[1] and CondIni == -1
+
+if labelCondition
+    label.new(bar_index, high, "🔴", color=color.new(color.green, 0), textcolor=color.white, style=label.style_none, yloc=yloc.abovebar, size=size.small, tooltip=tooltipL)
+
+
+
+
+
+
+leadingstatus = leadinglongcond ? "✔️" : "❌"
+leadingstatus_short = leadingshortcond ? "✔️" : "❌"
+
+
+rowcount = int(na)
+if array.size(confirmation_counter) ==0
+    rowcount := 5
+else
+    rowcount := array.size(confirmation_counter)+4
+
+
+if showdashboard
+    var table tab1 = table.new(i_tab1Ypos + '_' + i_tab1Xpos, 3, rowcount, color.rgb(42, 46, 57), color.rgb(204, 204, 204), 0, color.rgb(77, 71, 71), 1)
+
+
+    table.cell(tab1, 1, 0,"Long", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(61, 189, 72),text_color=color.white)
+    table.cell(tab1, 2, 0,"Short", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(243, 77, 77),text_color=color.white)
+
+
+    table.cell(tab1, 0, 1, "Leading Indicator", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+    table.cell(tab1, 1, 1,"", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+    table.cell(tab1, 2, 1,"", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+
+
+    table.cell(tab1, 0, 2, leadingindicator, text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+    table.cell(tab1, 1, 2, leadingstatus, text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+    table.cell(tab1, 2, 2, leadingstatus_short, text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+
+
+    table.cell(tab1, 0, 3, "Confirmation Indicators", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+    table.cell(tab1, 1, 3, "", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+    table.cell(tab1, 2, 3, "", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), bgcolor=color.rgb(68, 68, 67),text_color=color.white)
+
+    if array.size(confirmation_counter) > 0
+        for i=0 to array.size(confirmation_counter)-1
+            table.cell(tab1, 0, 4+i, array.get(confirmation_counter,i), text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+    else
+        table.cell(tab1, 0, 4, "None Selected", text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+
+
+    if array.size(confirmation_val) > 0
+        for j=0 to array.size(confirmation_val)-1
+            table.cell(tab1, 1, 4+j, array.get(confirmation_val,j), text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+            table.cell(tab1, 2, 4+j, array.get(confirmation_val_short,j), text_halign=text.align_left, text_size=table_size(in_dashboardtab_size), text_color=color.white)
+
+
+plot(longCondition?100:na, "long Signal",display = display.data_window )
+plot(shortCondition?-100:na, "Short Signal",display = display.data_window )
