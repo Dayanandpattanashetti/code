@@ -1,0 +1,999 @@
+indicator(title='Custom Also Builder  [ZP] - v1', shorttitle="Custom Also Builder  [ZP] - v1", overlay=true, max_bars_back=500)
+
+ma(_source, _length, _type) => 
+    switch _type
+        "SMA"  => ta.sma (_source, _length)
+        "EMA"  => ta.ema (_source, _length)
+        "RMA"  => ta.rma (_source, _length)
+        "WMA"  => ta.wma (_source, _length)
+        "VWMA" => ta.vwma(_source, _length)
+
+
+alarm(_osc, _message) => 
+    alert(syminfo.ticker + ' ' + _osc + ' : ' + _message + ', price (' + str.tostring(close, format.mintick) + ')')
+
+
+//Conditional Sampling EMA Function 
+Cond_EMA(x, cond, n) =>
+    var val = array.new_float(0)
+    var ema_val = array.new_float(1)
+    if cond
+        array.push(val, x)
+        if array.size(val) > 1
+            array.remove(val, 0)
+        if na(array.get(ema_val, 0))
+            array.fill(ema_val, array.get(val, 0))
+        array.set(ema_val, 0, (array.get(val, 0) - array.get(ema_val, 0)) * (2 / (n + 1)) + array.get(ema_val, 0))
+    EMA = array.get(ema_val, 0)
+    EMA
+
+//Conditional Sampling SMA Function
+Cond_SMA(x, cond, n) =>
+    var vals = array.new_float(0)
+    if cond
+        array.push(vals, x)
+        if array.size(vals) > n
+            array.remove(vals, 0)
+    SMA = array.avg(vals)
+    SMA
+
+//Standard Deviation Function
+Stdev(x, n) =>
+    math.sqrt(Cond_SMA(math.pow(x, 2), 1, n) - math.pow(Cond_SMA(x, 1, n), 2))
+
+//Range Size Function
+rng_size(x, scale, qty, n) =>
+    ATR = Cond_EMA(ta.tr(true), 1, n)
+    AC = Cond_EMA(math.abs(x - x[1]), 1, n)
+    SD = Stdev(x, n)
+    rng_size = scale == 'Pips' ? qty * 0.0001 : scale == 'Points' ? qty * syminfo.pointvalue : scale == '% of Price' ? close * qty / 100 : scale == 'ATR' ? qty * ATR : scale == 'Average Change' ? qty * AC : scale == 'Standard Deviation' ? qty * SD : scale == 'Ticks' ? qty * syminfo.mintick : qty
+    rng_size
+
+//Two Type Range Filter Function
+rng_filt(h, l, rng_, n, type, smooth, sn, av_rf, av_n) =>
+    rng_smooth = Cond_EMA(rng_, 1, sn)
+    r = smooth ? rng_smooth : rng_
+    var rfilt = array.new_float(2, (h + l) / 2)
+    array.set(rfilt, 1, array.get(rfilt, 0))
+    if type == 'Type 1'
+        if h - r > array.get(rfilt, 1)
+            array.set(rfilt, 0, h - r)
+        if l + r < array.get(rfilt, 1)
+            array.set(rfilt, 0, l + r)
+    if type == 'Type 2'
+        if h >= array.get(rfilt, 1) + r
+            array.set(rfilt, 0, array.get(rfilt, 1) + math.floor(math.abs(h - array.get(rfilt, 1)) / r) * r)
+        if l <= array.get(rfilt, 1) - r
+            array.set(rfilt, 0, array.get(rfilt, 1) - math.floor(math.abs(l - array.get(rfilt, 1)) / r) * r)
+    rng_filt1 = array.get(rfilt, 0)
+    hi_band1 = rng_filt1 + r
+    lo_band1 = rng_filt1 - r
+    rng_filt2 = Cond_EMA(rng_filt1, rng_filt1 != rng_filt1[1], av_n)
+    hi_band2 = Cond_EMA(hi_band1, rng_filt1 != rng_filt1[1], av_n)
+    lo_band2 = Cond_EMA(lo_band1, rng_filt1 != rng_filt1[1], av_n)
+    rng_filt = av_rf ? rng_filt2 : rng_filt1
+    hi_band = av_rf ? hi_band2 : hi_band1
+    lo_band = av_rf ? lo_band2 : lo_band1
+    [hi_band, lo_band, rng_filt]
+
+ma_function(source, length, type) =>
+
+
+    if type == 'RMA'
+        ta.rma(source, length)
+    else if type == 'SMA'
+        ta.sma(source, length)
+    else if type == 'EMA'
+        ta.ema(source, length)
+    else if type == 'WMA'
+        ta.wma(source, length)
+    else if type == 'HMA'
+        if(length<2)
+            ta.hma(source,2)
+        else
+            ta.hma(source, length)
+    else 
+        ta.vwma(source, length)
+    
+// Get Table Size
+table_size(s) => 
+    switch s
+        "Auto"   => size.auto   
+        "Huge"   => size.huge   
+        "Large"  => size.large  
+        "Normal" => size.normal 
+        "Small"  => size.small
+        => size.tiny
+
+setup_group= "████████ Indicator Setup ████████"
+signalexpiry = input.int(defval=3,  title='Signal Expiry Candle Count',group=setup_group, inline='expiry',tooltip="Number of candles to wait for all indicators to confirm a signal. Default is 3 which means if leading indicator print the signal, it will wait for max 3 more candles for rest of the indicators to print signal, if not then this setup is invalided and will have to wait for another signal form the leading indicator.")
+alternatesignal = input.bool (true, "Alternate Signal", group=setup_group, inline='alternate')
+
+showsignal = input.bool (true, "Show Long/Short Signal", group=setup_group,inline='showsignal',tooltip="Option to turn on/off the Long/Short signal shown on the chart. by default it will print Long/ Short signal on the chart.")
+
+showdashboard = input.bool (true, "Show Dashboard", group=setup_group,inline='dashboard')
+string i_tab1Ypos = input.string('bottom', 'Dashboard Position',group=setup_group, inline='dashboard2', options=['top', 'middle', 'bottom'])
+string i_tab1Xpos = input.string('right', '', inline='dashboard2', group=setup_group,options=['left', 'center', 'right'])
+in_dashboardtab_size = input.string(title="Dashboard Size    ", defval="Normal", 
+     options=["Auto",  "Huge",  "Large", "Normal", "Small", "Tiny"], 
+     group= setup_group , inline= "dashboard3")
+
+///////////////////////////////////////////////
+///// Signal filters
+/////////////////////////////////////////////
+leadingindicator = input.string(title="Leading Indicator", defval="Range Filter", 
+ options=["Range Filter", "Rational Quadratic Kernel (RQK)","Supertrend","Half Trend","Ichimoku Cloud","SuperIchi","True Strength Indicator (TSI)","Trend Direction Force Index (TDFI)","Trendline Breakout","Range Detector","Heiken-Ashi Candlestick Oscillator","Donchian Trend Ribbon","Stochastic","RSI","Rate of Change (ROC)","VWAP","CCI","2 EMA Cross","3 EMA Cross","B-Xtrender","Bull Bear Power Trend","Detrended Price Oscillator (DPO)","BB Oscillator","Trend Meter","Chandelier Exit","DMI (Adx)","Parabolic SAR (PSAR)","MACD","SSL Channel","Waddah Attar Explosion","Chaikin Money Flow","Vortex Index","Schaff Trend Cycle (STC)","Awesome Oscillator","Volatility Oscillator","Wolfpack Id","QQE Mod","Hull Suite"], group='████████ Main Indicator (signal) ████████', inline='li') 
+
+
+confirmation_group = "████████ Confirmation Indicators (filter) ████████ "
+
+
+ema_tooltip = "EMA filter for confirmation.\n\n Validates Long signal if price is above the EMA FILTER level, and validates Short signal if price is below the EMA FILTER level. \n\nDefault is 200, you can change that to meet your requiremnt."
+respectema = input.bool (false, "EMA Filter", group=confirmation_group, inline='respectema')
+respectemaperiod = input.int(defval=200, minval=1, title='', group=confirmation_group, inline='respectema', tooltip=ema_tooltip)
+
+ema2_tooltip = "Generates Long signal if Fast EMA cross above Slow EMA.\n\n Generates Short signal when Fast EMA cross below the Slow EMA.\n\n Default values are 50 and 200. you can change that to meet your requirement."
+respect2ma = input.bool (false, "2 EMA Cross : ", group=confirmation_group, inline='2ma')
+respect2maperiod_1 = input.int(defval=50,  title='',group=confirmation_group, inline='2ma')
+respect2maperiod_2 = input.int(defval=200,  title='',group=confirmation_group, inline='2ma',tooltip=ema2_tooltip)
+
+ema3_tooltip = "Generates Long signal if first EMA (Fastest) cross above 2nd and 3rd EMA and 2nd EMA cross above 3rd EMA.\n\n Generates Short signal if first EMA (Fastest) cross below 2nd and 3rd EMA and 2nd EMA cross below 3rd EMA .\n\n Default values are 9,21 and 55. you can change that to meet your requirement."
+respect3ma = input.bool (false, "3 EMA Cross : ", group=confirmation_group, inline='3ma',tooltip=ema3_tooltip)
+respect3maperiod_1 = input.int(defval=9,  title='',group=confirmation_group, inline='3ma',tooltip=ema3_tooltip)
+respect3maperiod_2 = input.int(defval=21,  title='',group=confirmation_group, inline='3ma',tooltip=ema3_tooltip)
+respect3maperiod_3 = input.int(defval=55,  title='',group=confirmation_group, inline='3ma',tooltip=ema3_tooltip)
+
+
+
+respectrf = input.bool (false, "Range Filter", group=confirmation_group, inline='rf')
+rftype = input.string(title="", defval="Default", options=["Default","DW"], group=confirmation_group, inline='rf') 
+
+respectrqk = input.bool (true, "Rational Quadratic Kernel (RQK)", group=confirmation_group, inline='rqk',tooltip="Nadaraya Watson: Rational Quadratic Kernel (RQK)")
+
+
+
+
+respectst = input.bool (false, "SuperTrend", group=confirmation_group, inline='st')
+
+respectht = input.bool (false, "Half Trend", group=confirmation_group, inline='ht')
+
+
+
+respectdonchian = input.bool (false, "Donchian Trend Ribbon", group=confirmation_group, inline='donchian')
+
+respectroc = input.bool (false, "Rate of Change (ROC)", group=confirmation_group, inline='roc')
+
+respecttsi = input.bool (false, "True Strength Indicator (TSI)", group=confirmation_group, inline='tsi')
+
+tsitooltip = "Signal Crossover:\n\n TSI crossover or greater than signal line for long, and TSI crossunder signal line for short.\n\n Zero Line Cross:\n\n TSI cross above zero line and signal line for long signal. Tsi Cross below zero and signal line for short signal."
+tsitype = input.string(title="", defval="Signal Cross", options=["Signal Cross", "Zero line cross"],tooltip=tsitooltip, group=confirmation_group, inline='tsi') 
+
+
+respecttdfi = input.bool (false, "Trend Direction Force Index (TDFI)", group=confirmation_group, inline='tdfi')
+
+
+respectmd = input.bool (false, "McGinley Dynamic", group=confirmation_group, inline='md')
+
+respectdpo = input.bool (false, "Detrended Price Oscillator (DPO)", group=confirmation_group, inline='dpo')
+
+
+
+respectichi = input.bool (false, "Ichimoku Cloud", group=confirmation_group, inline='ichi')
+
+
+respectsuperichi = input.bool (false, "SuperIchi", group=confirmation_group, inline='ichi',tooltip="Ichimoku Cloud Conditions: \n \n 1. Candle above cloud \n \n 2. Converstion Line above base line \n \n 3. Leading 26 bar cloud is green \n \n 4. lagging span is above the cloud")
+
+respecttrendline_breakout = input.bool (false, "Trendline Breakout", group=confirmation_group, inline='tb')
+
+respectrd = input.bool (false, "Range Detector", group=confirmation_group, inline='rd',tooltip="Range Detector:\n\n if used as leading indicator, it will be based on range breakout. \n\n If used as confirmation indicator, it will be used to filter entries within the active range area.")
+
+respecthacolt = input.bool (false, "Heiken-Ashi Candlestick Oscillator", group=confirmation_group, inline='hacolt',tooltip="Vervoort LongTerm Heiken-Ashi Candlestick Oscillator:\n\n If oscilliation is above 0 line, then long signal is issued and if below zero line, short signal is issued.")
+
+
+
+respectbx = input.bool (false, "B-Xtrender", group=confirmation_group, inline='bx')
+bxtype = input.string(title="", defval="Short and Long term trend", options=["Short and Long term trend","Short Term trend"], group=confirmation_group, inline='bx', tooltip = "Short term trend:\n\n===================== \n\n For buy signal the short term trend line must turn green, and for the sell signal, the short term trend line must turn red. \n\n Short and Long term trend: \n\n===================== \n\n For buy signal, the short term trend must change from red to green and long term trend cross above zero line, for Sell signal the short term trend must turn red and long term trend line cross down the zero line..") 
+
+
+respectbbpt = input.bool (false, "Bull bear Power Trend", group=confirmation_group, inline='bbpt')
+bbpttype = input.string(title="", defval="Follow Trend", options=["Follow Trend","Without Trend"], group=confirmation_group, inline='bbpt', tooltip = "Follow Trend:\n\n===================== \n\n Buy signal will be validated if the BBPT trend line is above 2, and Sell signal will be validated if BBPT trend line is below -2. \n\n Without Trend: \n\n===================== \n\n Ignore the BBPT trend line.") 
+
+
+
+respectvwap = input.bool (false, "VWAP", group=confirmation_group, inline='vwap')
+
+respectbbosc = input.bool (false, "BB Oscillator", group=confirmation_group, inline='bbosc')
+bbtype = input.string(title="", defval="Entering Lower/Upper Band", options=["Entering Lower/Upper Band","Exiting Lower/Upper Band"], group=confirmation_group, inline='bbosc') 
+
+
+respecttm = input.bool (false, "Trend Meter", group=confirmation_group, inline='tm')
+tmtype = input.string(title="", defval="3 TM and 2 TB change to same color", options=["3 TM change to same color", "3 TM and 2 TB change to same color", "3 TM, 2 TB and Wavetrend change to same color"], group=confirmation_group, inline='tm') 
+
+
+respectce = input.bool (false, "Chandelier Exit", group=confirmation_group, inline='ce')
+
+
+
+respectcci = input.bool (false, "CCI", group=confirmation_group, inline='cci')
+
+
+
+respectao = input.bool (false, "Awesome Oscillator", group=confirmation_group, inline='ao')
+aotype = input.string(title="", defval="Zero Line Cross", options=["Zero Line Cross","AC Zero Line Cross","AC Momentum Bar"], group=confirmation_group, inline='ao', tooltip = "Zero Line Cross:\n\n If AO value cross the zero line up, Buy signal will be generated, and if AO value cross down the zero line, sell signal will be generated.") 
+
+
+respectadx = input.bool (false, "DMI (ADx)", group=confirmation_group, inline='adx')
+adxtype = input.string(title="", defval="Adx & +Di -Di", options=["Adx Only","Adx & +Di -Di", "Advance"], group=confirmation_group, inline='adx', tooltip = "Adx Only:\n\n If Adx value is above the defined level. \n\n Adx & +Di -DI :\n\n When Adx value is above the defined level and croseeover between +di and -di. Di will determine the direction of the movement. \n\n Advance: ") 
+
+respectsar = input.bool (false, "Parabolic SAR (PSAR)", group=confirmation_group, inline='sar')
+
+
+respectwae = input.bool (false, "Waddah Attar Explosion", group=confirmation_group, inline='wae')
+
+
+
+vo_tooltip = "Volatility Oscillator: \n\n ======================= \n\n If the spike line is above the upper line, buy signal is generated (or validated). \n\n If the spike line is below the lower line, sell signal is generated (or validated)."
+respectvo = input.bool (false, "Volatility Oscillator", group=confirmation_group, inline='vo', tooltip = vo_tooltip)
+
+
+ci_tooltip = "Choppiness index: \n\n ======================= \n\n If the index is below the defined threshold (default 61.8) then asset is considered trending and signal will be validated, if index is above 61.8 then asset is considered having sideway movement."
+respectci = input.bool (false, "Choppiness Index  ", group=confirmation_group, inline='ci')
+ci_limit = input.float(61.8,title=" ", inline='ci',group=confirmation_group, tooltip = ci_tooltip)
+
+respectdv = input.bool (false, "Damiani Volatility (DV)", group=confirmation_group, inline='dv')
+
+dvtype = input.string(title="", defval="Simple", options=["Simple", "Threshold","10p Difference"], group=confirmation_group, inline='dv', tooltip = "Simple\n Volatility is green. \nThreshold\n Volatility green and >1.1") 
+
+
+stochtooltip="CrossOver:\n------------------\n\n CrossOver of K and D line at any level. \n\n CrossOver in OB & OS levels:\n\n Generate buy signal if crossover happens in oversold area and crossing up oversold level.\n\n Generate sell signal on crossover in overbought area and cross down upper level. \n------------------\n\n %K above/below %D\n------------------\n: Generate Buy signal or validate other signal if %K is above %D and opposite for Sell Signal."
+
+respectstochastic = input.bool (false, "Stochastic", group=confirmation_group, inline='stoch')
+stochtype = input.string(title="", defval="CrossOver", options=["CrossOver", "CrossOver in OB & OS levels","%K above/below %D"],tooltip=stochtooltip, group=confirmation_group, inline='stoch') 
+rsi_tooltip = "RSI MA Cross:\n=============\n Generate buy signal when RSI cross up RSI MA line and sell signal when RSI cross down RSI MA line.\n\nRSI Exits OB/OS zones:\n==================\n Generate Buy signal when RSI crosses down the overbough zone and sell signal when RSI crosses up the oversold zone.\n\nRSI Level:\n==========\nGenerate buy signal if RSI cross above the specific level and sell signal when RSI crossdown the level.\n\n\n +++++\nYou can change the setting to define the OB/OS and MidLine Levels"
+
+respectrsi = input.bool (false, "RSI", group=confirmation_group, inline='rsi')
+rsitype = input.string(title="", defval="RSI MA Cross", options=["RSI MA Cross", "RSI Exits OB/OS zones","RSI Level"], tooltip=rsi_tooltip, group=confirmation_group, inline='rsi') 
+
+rsima_tooltip = "RSI MA Direction:\n=============\n The buy and sell signal will respect the RSI MA direction. For buy signal, the RSI MA should be increasing or same compared to previous RSI MA. \n\n for SHORT, the RSI MA should be same or decreasing compared to last RSI MA"
+respectrsima = input.bool (false, "RSI MA Direction", group=confirmation_group, inline='rsi2',tooltip=rsima_tooltip)
+
+rsilimit_tooltip = "RSI Limit:\n=============\n This is to allow you to set limit for the RSI value for long and short. default value for long is 40, which means if the RSI is 40 or above, only then BUY signal will be validated. \n\nfor short if RSI is 60 or less, only then sell signal willbe validated."
+respectrsilimit = input.bool (false, "RSI Limit : ", group=confirmation_group, inline='rsi3',tooltip=rsilimit_tooltip)
+
+rsilimitup = input.int(40, title="Long",inline='rsi3', group=confirmation_group)
+rsilimitdown = input.int(60, title="short",inline='rsi3', group=confirmation_group)
+
+
+rsimalimit_tooltip = "RSI MA Limit:\n=============\n This is to allow you to set limit for the RSI MA value for long and short. default value for long is 40, which means if the RSI MA is 40 or above, only then BUY signal will be validated. \n\nfor short if RSI MA is 60 or less, only then sell signal willbe validated."
+respectrsimalimit = input.bool (false, "RSI MA Limit : ", group=confirmation_group, inline='rsi4',tooltip=rsimalimit_tooltip)
+
+rsimalimitup = input.int(40, title="Long",inline='rsi4', group=confirmation_group)
+rsimalimitdown = input.int(60, title="short",inline='rsi4', group=confirmation_group)
+
+
+
+
+
+macdtooltip="MACD Crossover:\n------------------\n\n CrossOver of MACD and the Signal line. Generates Long signal when MACD cross up Signal line and Short signal when MACD cross down Signal Line. . \n\n Zero line crossover:\n------------------\n\n Generate buy signal when MACD cross up the zero line and Sell signal when MACD cross down the zero line."
+respectmacd = input.bool (false, "MACD", group=confirmation_group, inline='macd')
+macdtype = input.string(title="", defval="MACD Crossover", options=["MACD Crossover", "Zero line crossover"],tooltip=macdtooltip, group=confirmation_group, inline='macd') 
+
+respectssl = input.bool (false, "SSL Channel", group=confirmation_group, inline='ssl')
+
+respectstc = input.bool (false, "Schaff Trend Cycle (STC)", group=confirmation_group, inline='stc')
+respectchaikin = input.bool (false, "Chaikin Money Flow", group=confirmation_group, inline='chaikin')
+
+respectvol = input.bool (false, "Volume", group=confirmation_group, inline='volume')
+volumetype = input.string(title="", defval="volume above MA", options=["volume above MA","Simple", "Delta"], group=confirmation_group, inline='volume', tooltip = "Simple volume is comparing the up/down volme with previous candle. \nVolume delta will compare the delta or difference between up and down volume with previous candle.\nExample:\n up volume = 100 \n Down volume=-1100\n Delta = -1000\n Satisfy the bear flag condition if previous -ve delta is lower")
+
+respectwolf = input.bool (false, "Wolfpack Id", group=confirmation_group, inline='wolf')
+
+
+respectqqe = input.bool (false, "QQE Mod", group=confirmation_group, inline='qqe')
+qqetype = input.string(title="", defval="Line", options=["Line", "Bar","Line & Bar"], group=confirmation_group, inline='qqe', tooltip = "Line: signal generated when QQE line is above or below 0. \nBar: when Blue bar is above 0 or Red bar below 0 \nLine & Bar: Both Bar and Line to be above(bullist) or below (bearish) 0" )
+
+respecthull = input.bool (false, "Hull Suite",group=confirmation_group, inline='hull')
+
+
+respectvi = input.bool (false, "Vortex Indicator",group=confirmation_group, inline='vi')
+vitype = input.string(title="", defval="Simple", options=["Simple", "Advance"],group=confirmation_group, inline='vi', 
+ tooltip = "Simple\n Green Cross Red. \Advance\n     vipcondition := vip > vim and vip > viupper and vip > vip[1] and vim < vim[1] and vim[1] <= vilower and vip[1] >= viupper
+  vimcondition := vip < vim and vim > viupper and vim > vim[1] and vip < vip [1] and vip[1] <= vilower and vim [1] >= viupper ") 
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+// Switch Board
+////////////////////////////////////////////////////////////////////////
+
+switchboard_group = "████ Switch Board (Turn On/Off Overlay Indicators) ████"
+switch_ema = input.bool (false, "EMA", group=switchboard_group, inline='Switch1')
+switch_poi = input.bool (true, "Supply/Demand Zone", group=switchboard_group, inline='Switch1')
+switch_sar = input.bool (false, "PSAR", group=switchboard_group, inline='Switch1')
+switch_ichi = input.bool (false, "Ichimoku Cloud", group=switchboard_group, inline='Switch2')
+
+switch_ha = input.bool (false, "Heiken-Ashi Candles", group=switchboard_group, inline='Switch2')
+
+
+
+switch_rd = input.bool (false, "Range Detector", group=switchboard_group, inline='Switch2')
+switch_vwap = input.bool (false, "VWAP", group=switchboard_group, inline='Switch3')
+switch_bb = input.bool (false, "Bollinger Band", group=switchboard_group, inline='Switch3')
+
+switch_supertrend = input.bool (false, "Supertrend", group=switchboard_group, inline='Switch2')
+switch_halftrend= input.bool (false, "Half Trend", group=switchboard_group, inline='Switch2')
+
+switch_rangefilter = input.bool (false, "Range Filter", group=switchboard_group, inline='Switch2')
+
+
+switch_stc = input.bool (false, "STC", group=switchboard_group, inline='Switch3')
+switch_pvsra = input.bool (true, "PVSRA", group=switchboard_group, inline='Switch3')
+switch_vectorzone = input.bool (false, "Liquidity Zone", group=switchboard_group, inline='Switch3')
+switch_fvg = input.bool (false, "Fair Value Gap (FVG)", group=switchboard_group, inline='Switch4')
+switch_pivot = input.bool (false, "Pivot Levels", group=switchboard_group, inline='Switch4')
+switch_fractal = input.bool (false, "Fractal", group=switchboard_group, inline='Switch4')
+
+bool show_markets = input.bool(true, group=switchboard_group, title='Market Sessions', tooltip='Turn on or off all market sessions')  
+
+
+/////////////////////////////////////////////////////////////////////////
+// EMA Selection
+////////////////////////////////////////////////////////////////////////
+
+ma_group= "██████████ MAs Line ██████████"
+len1bool = input.bool(true,'',group=ma_group,inline='len1')
+len1 = input.int(5,  title='MA 1',group=ma_group,inline='len1')
+string ma_1_type = input.string(defval='EMA', title='Type', options=['RMA', 'SMA', 'EMA', 'WMA','HMA','VWMA'], inline='len1',group=ma_group)
+color ma_1_colour = input.color(color.rgb(254, 234, 74, 0), '', inline='len1',group=ma_group)
+
+
+len2bool = input.bool(true,'',group=ma_group,inline='len2')
+len2 = input.int(13, minval=1, title='MA 2',group=ma_group,inline='len2')
+string ma_2_type = input.string(defval='EMA', title='Type', options=['RMA', 'SMA', 'EMA', 'WMA','HMA','VWMA'], inline='len2',group=ma_group)
+color ma_2_colour = input.color(color.rgb(253, 84, 87, 0), '', inline='len2',group=ma_group)
+
+
+len3bool = input.bool(false,'',group=ma_group,inline='len3')
+len3 = input.int(20, minval=1, title='MA 3',group=ma_group,inline='len3')
+string ma_3_type = input.string(defval='EMA', title='Type', options=['RMA', 'SMA', 'EMA', 'WMA','HMA','VWMA'], inline='len3',group=ma_group)
+color ma_3_colour = input.color(color.new(color.aqua, 0), '', inline='len3',group=ma_group)
+
+len4bool = input.bool(true,'',group=ma_group,inline='len4')
+len4 = input.int(50, minval=1, title='MA 4',group=ma_group,inline='len4')
+string ma_4_type = input.string(defval='EMA', title='Type', options=['RMA', 'SMA', 'EMA', 'WMA','HMA','VWMA'], inline='len4',group=ma_group)
+color ma_4_colour = input.color(color.new(color.blue, 0), '', inline='len4',group=ma_group)
+
+len5bool = input.bool(true,'',group=ma_group,inline='len5')
+len5 = input.int(200, minval=1, title='MA 5',group=ma_group,inline='len5')
+string ma_5_type = input.string(defval='EMA', title='Type', options=['RMA', 'SMA', 'EMA', 'WMA','HMA','VWMA'], inline='len5',group=ma_group)
+color ma_5_colour = input.color(color.new(color.white, 0), '', inline='len5',group=ma_group)
+
+
+
+ema1 = request.security(syminfo.tickerid, timeframe.period, ma_function(close, len1, ma_1_type))
+ema2 = request.security(syminfo.tickerid, timeframe.period, ma_function(close, len2, ma_2_type))
+ema3 = request.security(syminfo.tickerid, timeframe.period, ma_function(close, len3, ma_3_type))
+ema4 = request.security(syminfo.tickerid, timeframe.period, ma_function(close, len4, ma_4_type))
+ema5 = request.security(syminfo.tickerid, timeframe.period, ma_function(close, len5, ma_5_type))
+
+
+plot(len1bool and switch_ema ? ema1:na, color=ma_1_colour, linewidth=2, title='MA 1')
+plot(len2bool and switch_ema? ema2:na, color=ma_2_colour, linewidth=2, title='MA 2')
+plot(len3bool and switch_ema? ema3:na, color=ma_3_colour, linewidth=2, title='MA 3')
+plot(len4bool and switch_ema? ema4:na, color=ma_4_colour, linewidth=2, title='MA 4')
+plot(len5bool and switch_ema? ema5:na, color=ma_5_colour, linewidth=2, title='MA 5')
+
+
+
+
+////////////////////////////////////////////////////////////////////////////
+//////////// 2EMA cross
+////////////////////////////////////////////////////////////////////////////
+
+var float first_2ema = 0
+var float second_2ema = 0
+
+
+if respect2ma or leadingindicator=='2 EMA Cross'
+    first_2ema := ta.ema(close, respect2maperiod_1)
+    second_2ema := ta.ema(close, respect2maperiod_2)
+
+
+////////////////////////////////////////////////////////////////////////////
+//////////// 3EMA cross
+////////////////////////////////////////////////////////////////////////////
+var float first_3ema = 0
+var float second_3ema = 0
+var float third_3ema = 0
+
+
+if respect3ma  or leadingindicator=='3 EMA Cross'
+    first_3ema := ta.ema(close, respect3maperiod_1)
+    second_3ema := ta.ema(close, respect3maperiod_2)
+    third_3ema := ta.ema(close, respect3maperiod_3)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////
+// Pivots
+//////////////////////////////////////////////////////////////////////////
+
+pivot_group = '██████████ Pivot Levels ██████████'
+
+AUTO = "Auto"
+DAILY = "Daily"
+WEEKLY = "Weekly"
+MONTHLY = "Monthly"
+QUARTERLY = "Quarterly"
+YEARLY = "Yearly"
+BIYEARLY = "Biyearly"
+TRIYEARLY = "Triyearly"
+QUINQUENNIALLY = "Quinquennially"
+DECENNIALLY = "Decennially"
+
+TRADITIONAL = "Traditional"
+WOODIE = "Woodie"
+
+
+kind = input.string(title="Type", defval="Traditional", options=[TRADITIONAL], group=pivot_group)
+pivot_time_frame = input.string(title="Pivots Timeframe", defval=AUTO, options=[AUTO, DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY, BIYEARLY, TRIYEARLY, QUINQUENNIALLY, DECENNIALLY], group=pivot_group)
+look_back = input.int(title="Number of Pivots Back", defval=1, minval=1, maxval=5000, group=pivot_group)
+is_daily_based = input.bool(title="Use Daily-based Values", defval=true, group=pivot_group, tooltip="When this option is unchecked, Pivot Points will use intraday data while calculating on intraday charts. If Extended Hours are displayed on the chart, they will be taken into account during the pivot level calculation. If intraday OHLC values are different from daily-based values (normal for stocks), the pivot levels will also differ.")
+show_labels = input.bool(title="Show Labels", defval=true, group=pivot_group)
+show_prices = input.bool(title="Show Prices", defval=true, group=pivot_group)
+position_labels = input.string("Left", "Labels Position", options=["Left", "Right"], group=pivot_group)
+line_width = input.int(title="Line Width", defval=1, minval=1, maxval=100, group=pivot_group)
+
+
+var DEF_COLOR = #FB8C00
+var arr_time = array.new_int()
+var p = array.new_float()
+p_color = input.color(DEF_COLOR, "P‏  ‏  ‏", inline="P", group=pivot_group)
+p_show = input.bool(true, "", inline="P", group=pivot_group)
+var r1 = array.new_float()
+var s1 = array.new_float()
+s1_color = input.color(DEF_COLOR, "S1", inline="S1/R1" , group=pivot_group)
+s1_show = input.bool(true, "", inline="S1/R1", group=pivot_group)
+r1_color = input.color(DEF_COLOR, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R1", inline="S1/R1", group=pivot_group)
+r1_show = input.bool(true, "", inline="S1/R1", group=pivot_group)
+var r2 = array.new_float()
+var s2 = array.new_float()
+s2_color = input.color(DEF_COLOR, "S2", inline="S2/R2", group=pivot_group)
+s2_show = input.bool(true, "", inline="S2/R2", group=pivot_group)
+r2_color = input.color(DEF_COLOR, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R2", inline="S2/R2", group=pivot_group)
+r2_show = input.bool(true, "", inline="S2/R2", group=pivot_group)
+var r3 = array.new_float()
+var s3 = array.new_float()
+s3_color = input.color(DEF_COLOR, "S3", inline="S3/R3", group=pivot_group)
+s3_show = input.bool(true, "", inline="S3/R3", group=pivot_group)
+r3_color = input.color(DEF_COLOR, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R3", inline="S3/R3", group=pivot_group)
+r3_show = input.bool(true, "", inline="S3/R3", group=pivot_group)
+
+pivotX_open = float(na)
+pivotX_open := nz(pivotX_open[1], open)
+pivotX_high = float(na)
+pivotX_high := nz(pivotX_high[1], high)
+pivotX_low = float(na)
+pivotX_low := nz(pivotX_low[1], low)
+pivotX_prev_open = float(na)
+pivotX_prev_open := nz(pivotX_prev_open[1])
+pivotX_prev_high = float(na)
+pivotX_prev_high := nz(pivotX_prev_high[1])
+pivotX_prev_low = float(na)
+pivotX_prev_low := nz(pivotX_prev_low[1])
+pivotX_prev_close = float(na)
+pivotX_prev_close := nz(pivotX_prev_close[1])
+
+get_pivot_resolution() =>
+    resolution = "M"
+    if pivot_time_frame == AUTO
+        if timeframe.isintraday
+            resolution := timeframe.multiplier <= 15 ? "D" : "W"
+        else if timeframe.isweekly or timeframe.ismonthly
+            resolution := "12M"
+    else if pivot_time_frame == DAILY
+        resolution := "D"
+    else if pivot_time_frame == WEEKLY
+        resolution := "W"
+    else if pivot_time_frame == MONTHLY
+        resolution := "M"
+    else if pivot_time_frame == QUARTERLY
+        resolution := "3M"
+    else if pivot_time_frame == YEARLY or pivot_time_frame == BIYEARLY or pivot_time_frame == TRIYEARLY or pivot_time_frame == QUINQUENNIALLY or pivot_time_frame == DECENNIALLY
+        resolution := "12M"
+    resolution
+
+var lines = array.new_line()
+var labels = array.new_label()
+
+draw_line(i, pivot, col) =>
+    if array.size(arr_time) > 1
+        array.push(lines, line.new(array.get(arr_time, i), array.get(pivot, i), array.get(arr_time, i + 1), array.get(pivot, i), color=col, xloc=xloc.bar_time, width=line_width))
+
+draw_label(i, y, txt, txt_color) =>
+    if (show_labels or show_prices) and not na(y)
+        display_text = (show_labels ? txt : "") + (show_prices ? str.format(" ({0})", math.round_to_mintick(y)) : "")
+        label_style = position_labels == "Left" ? label.style_label_right : label.style_label_left
+        x = position_labels == "Left" ? array.get(arr_time, i) : array.get(arr_time, i + 1)
+        array.push(labels, label.new(x = x, y=y, text=display_text, textcolor=txt_color, style=label_style, color=#00000000, xloc=xloc.bar_time))
+
+traditional() =>
+    pivotX_Median = (pivotX_prev_high + pivotX_prev_low + pivotX_prev_close) / 3
+    array.push(p, pivotX_Median)
+    array.push(r1, pivotX_Median * 2 - pivotX_prev_low)
+    array.push(s1, pivotX_Median * 2 - pivotX_prev_high)
+    array.push(r2, pivotX_Median + 1 * (pivotX_prev_high - pivotX_prev_low))
+    array.push(s2, pivotX_Median - 1 * (pivotX_prev_high - pivotX_prev_low))
+    array.push(r3, pivotX_Median * 2 + (pivotX_prev_high - 2 * pivotX_prev_low))
+    array.push(s3, pivotX_Median * 2 - (2 * pivotX_prev_high - pivotX_prev_low))
+
+
+calc_pivot() =>
+    if kind == TRADITIONAL
+        traditional()
+
+
+resolution = get_pivot_resolution()
+
+SIMPLE_DIVISOR = -1
+custom_years_divisor = switch pivot_time_frame
+	BIYEARLY => 2
+	TRIYEARLY => 3
+	QUINQUENNIALLY => 5
+	DECENNIALLY => 10
+	=> SIMPLE_DIVISOR
+
+calc_high(prev, curr) =>
+    if na(prev) or na(curr)
+        nz(prev, nz(curr, na))
+    else
+        math.max(prev, curr)
+    
+calc_low(prev, curr) =>
+    if not na(prev) and not na(curr)
+        math.min(prev, curr)
+    else
+        nz(prev, nz(curr, na))
+
+calc_OHLC_for_pivot(custom_years_divisor) =>
+    if custom_years_divisor == SIMPLE_DIVISOR 
+        [open, high, low, close, open[1], high[1], low[1], close[1], time[1], time_close]
+    else
+        var prev_sec_open = float(na)
+        var prev_sec_high = float(na)
+        var prev_sec_low = float(na)
+        var prev_sec_close = float(na)
+        var prev_sec_time = int(na)
+        var curr_sec_open = float(na)
+        var curr_sec_high = float(na)
+        var curr_sec_low = float(na)
+        var curr_sec_close = float(na)
+        if year(time_close) % custom_years_divisor == 0
+        	curr_sec_open := open
+			curr_sec_high := high
+			curr_sec_low := low
+			curr_sec_close := close
+            prev_sec_high := high[1]
+            prev_sec_low := low[1]
+            prev_sec_close := close[1]
+            prev_sec_time := time[1]
+            for i = 2 to custom_years_divisor
+                prev_sec_open :=  nz(open[i], prev_sec_open)
+                prev_sec_high := calc_high(prev_sec_high, high[i])
+                prev_sec_low := calc_low(prev_sec_low, low[i])
+                prev_sec_time := nz(time[i], prev_sec_time)
+        [curr_sec_open, curr_sec_high, curr_sec_low, curr_sec_close, prev_sec_open, prev_sec_high, prev_sec_low, prev_sec_close, prev_sec_time, time_close]
+
+[sec_open, sec_high, sec_low, sec_close, prev_sec_open, prev_sec_high, prev_sec_low, prev_sec_close, prev_sec_time, sec_time] = request.security(syminfo.tickerid, resolution, calc_OHLC_for_pivot(custom_years_divisor), lookahead = barmerge.lookahead_on)
+sec_open_gaps_on = request.security(syminfo.tickerid, resolution, open, gaps = barmerge.gaps_on, lookahead = barmerge.lookahead_on)
+
+is_change_years = custom_years_divisor > 0 and ta.change(time(resolution)) and year(time_close) % custom_years_divisor == 0
+
+var is_change = false
+var uses_current_bar = timeframe.isintraday and kind == WOODIE
+var change_time = int(na)
+is_time_change = (ta.change(time(resolution)) and custom_years_divisor == SIMPLE_DIVISOR) or is_change_years
+if is_time_change
+    change_time := time
+
+var start_time = time
+var was_last_premarket = false
+var start_calculate_in_premarket = false
+
+is_last_premarket = barstate.islast and session.ispremarket and time_close > sec_time and not was_last_premarket
+
+if is_last_premarket
+    was_last_premarket := true
+    start_calculate_in_premarket := true
+if session.ismarket
+    was_last_premarket := false
+    
+without_time_change = barstate.islast and array.size(arr_time) == 0
+is_can_calc_pivot = (not uses_current_bar and is_time_change and session.ismarket) or (ta.change(sec_open) and not start_calculate_in_premarket) or is_last_premarket or (uses_current_bar and not na(sec_open_gaps_on)) or without_time_change
+enough_bars_for_calculate = prev_sec_time >= start_time or is_daily_based
+
+if is_can_calc_pivot and enough_bars_for_calculate and switch_pivot
+    if array.size(arr_time) == 0 and is_daily_based
+        pivotX_prev_open := prev_sec_open[1]
+        pivotX_prev_high := prev_sec_high[1]
+        pivotX_prev_low := prev_sec_low[1]
+        pivotX_prev_close := prev_sec_close[1]
+        pivotX_open := sec_open[1]
+        pivotX_high := sec_high[1]
+        pivotX_low := sec_low[1]
+        array.push(arr_time, start_time)
+        calc_pivot()
+    
+    if is_daily_based
+    	if is_last_premarket
+            pivotX_prev_open := sec_open
+            pivotX_prev_high := sec_high
+            pivotX_prev_low := sec_low
+            pivotX_prev_close := sec_close
+            pivotX_open := open
+            pivotX_high := high
+            pivotX_low := low
+        else
+			pivotX_prev_open := prev_sec_open
+			pivotX_prev_high := prev_sec_high
+			pivotX_prev_low := prev_sec_low
+			pivotX_prev_close := prev_sec_close
+			pivotX_open := sec_open
+			pivotX_high := sec_high
+			pivotX_low := sec_low
+    else
+        pivotX_prev_high := pivotX_high
+        pivotX_prev_low := pivotX_low
+        pivotX_prev_open := pivotX_open
+        pivotX_prev_close := close[1]
+        pivotX_open := open
+        pivotX_high := high
+        pivotX_low := low
+
+    if barstate.islast and not is_change and array.size(arr_time) > 0 and not without_time_change
+        array.set(arr_time, array.size(arr_time) - 1, change_time)
+    else if without_time_change
+        array.push(arr_time, start_time)
+    else
+        array.push(arr_time, nz(change_time, time))
+
+    calc_pivot()
+
+    if array.size(arr_time) > look_back
+        if array.size(arr_time) > 0
+            array.shift(arr_time)
+        if array.size(p) > 0 and p_show
+            array.shift(p)
+        if array.size(r1) > 0 and r1_show
+            array.shift(r1)
+        if array.size(s1) > 0 and s1_show
+            array.shift(s1)
+        if array.size(r2) > 0 and r2_show
+            array.shift(r2)
+        if array.size(s2) > 0 and s2_show
+            array.shift(s2)
+        if array.size(r3) > 0 and r3_show
+            array.shift(r3)
+        if array.size(s3) > 0 and s3_show
+            array.shift(s3)
+
+    is_change := true
+else if not is_daily_based and switch_pivot
+    pivotX_high := math.max(pivotX_high, high)
+    pivotX_low := math.min(pivotX_low, low)
+
+if barstate.islast and not is_daily_based and array.size(arr_time) == 0 
+    runtime.error("Not enough intraday data to calculate Pivot Points. Lower the Pivots Timeframe or turn on the 'Use Daily-based Values' option in the indicator settings.")
+
+if barstate.islast and array.size(arr_time) > 0 and is_change and switch_pivot
+    is_change := false
+    if custom_years_divisor > 0
+        last_pivot_time = array.get(arr_time, array.size(arr_time) - 1)
+        pivot_timeframe = str.tostring(12 * custom_years_divisor) + "M"
+        estimate_pivot_time = last_pivot_time + timeframe.in_seconds(pivot_timeframe) * 1000
+        array.push(arr_time, estimate_pivot_time)
+    else
+        array.push(arr_time, time_close(resolution))
+
+    for i = 0 to array.size(lines) - 1
+        if array.size(lines) > 0
+            line.delete(array.shift(lines))
+        if array.size(labels) > 0
+            label.delete(array.shift(labels))
+
+    for i = 0 to array.size(arr_time) - 2
+        if array.size(p) > 0 and p_show
+            draw_line(i, p, p_color)
+            draw_label(i, array.get(p, i), "P", p_color)
+        if array.size(r1) > 0 and r1_show
+            draw_line(i, r1, r1_color)
+            draw_label(i, array.get(r1, i), "R1", r1_color)
+        if array.size(s1) > 0 and s1_show
+            draw_line(i, s1, s1_color)
+            draw_label(i, array.get(s1, i), "S1", s1_color)
+        if array.size(r2) > 0 and r2_show
+            draw_line(i, r2, r2_color)
+            draw_label(i, array.get(r2, i), "R2", r2_color)
+        if array.size(s2) > 0 and s2_show
+            draw_line(i, s2, s2_color)
+            draw_label(i, array.get(s2, i), "S2", s2_color)
+        if array.size(r3) > 0 and r3_show
+            draw_line(i, r3, r3_color)
+            draw_label(i, array.get(r3, i), "R3", r3_color)
+        if array.size(s3) > 0 and s3_show
+            draw_line(i, s3, s3_color)
+            draw_label(i, array.get(s3, i), "S3", s3_color)
+ 
+
+
+
+
+//////////////////////////////////////////////////////////////////////////
+// William Fractals
+//////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+// Define "n" as the number of periods and keep a minimum value of 2 for error handling.
+n = input.int(title="Periods", defval=2, minval=2,group="██████████ Fractal ██████████")
+
+
+// UpFractal
+bool upflagDownFrontier = true
+bool upflagUpFrontier0 = true
+bool upflagUpFrontier1 = true
+bool upflagUpFrontier2 = true
+bool upflagUpFrontier3 = true
+bool upflagUpFrontier4 = true
+
+if switch_fractal
+    for i = 1 to n
+        upflagDownFrontier := upflagDownFrontier and (high[n-i] < high[n])
+        upflagUpFrontier0 := upflagUpFrontier0 and (high[n+i] < high[n])
+        upflagUpFrontier1 := upflagUpFrontier1 and (high[n+1] <= high[n] and high[n+i + 1] < high[n])
+        upflagUpFrontier2 := upflagUpFrontier2 and (high[n+1] <= high[n] and high[n+2] <= high[n] and high[n+i + 2] < high[n])
+        upflagUpFrontier3 := upflagUpFrontier3 and (high[n+1] <= high[n] and high[n+2] <= high[n] and high[n+3] <= high[n] and high[n+i + 3] < high[n])
+        upflagUpFrontier4 := upflagUpFrontier4 and (high[n+1] <= high[n] and high[n+2] <= high[n] and high[n+3] <= high[n] and high[n+4] <= high[n] and high[n+i + 4] < high[n])
+flagUpFrontier = upflagUpFrontier0 or upflagUpFrontier1 or upflagUpFrontier2 or upflagUpFrontier3 or upflagUpFrontier4
+
+upFractal = (upflagDownFrontier and flagUpFrontier)
+
+
+// downFractal
+bool downflagDownFrontier = true
+bool downflagUpFrontier0 = true
+bool downflagUpFrontier1 = true
+bool downflagUpFrontier2 = true
+bool downflagUpFrontier3 = true
+bool downflagUpFrontier4 = true
+
+if switch_fractal
+    for i = 1 to n
+        downflagDownFrontier := downflagDownFrontier and (low[n-i] > low[n])
+        downflagUpFrontier0 := downflagUpFrontier0 and (low[n+i] > low[n])
+        downflagUpFrontier1 := downflagUpFrontier1 and (low[n+1] >= low[n] and low[n+i + 1] > low[n])
+        downflagUpFrontier2 := downflagUpFrontier2 and (low[n+1] >= low[n] and low[n+2] >= low[n] and low[n+i + 2] > low[n])
+        downflagUpFrontier3 := downflagUpFrontier3 and (low[n+1] >= low[n] and low[n+2] >= low[n] and low[n+3] >= low[n] and low[n+i + 3] > low[n])
+        downflagUpFrontier4 := downflagUpFrontier4 and (low[n+1] >= low[n] and low[n+2] >= low[n] and low[n+3] >= low[n] and low[n+4] >= low[n] and low[n+i + 4] > low[n])
+flagDownFrontier = downflagUpFrontier0 or downflagUpFrontier1 or downflagUpFrontier2 or downflagUpFrontier3 or downflagUpFrontier4
+
+downFractal = (downflagDownFrontier and flagDownFrontier)
+
+plotshape(downFractal and switch_fractal ? true : na, style=shape.triangledown, location=location.belowbar, offset=-n, color=#F44336, size = size.small)
+plotshape(upFractal and switch_fractal ? true : na, style=shape.triangleup,   location=location.abovebar, offset=-n, color=#009688, size = size.small)
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////
+// Range Filter
+//////////////////////////////////////////////////////////////////////////
+
+rf_group= "██████████ Range Filter ██████████"
+
+//switch_rangefilter  = input.bool (true, "Show Range Filter Signals", group='=============== Range Filter ================')
+showrfline = input.bool (true, "Show RF line", group=rf_group)
+
+
+src = input.source(defval=close, title='Source', group=rf_group,inline = 'rf')
+
+// Sampling Period
+// Settings for 5min chart, BTCUSDC. For Other coin, change the paremeters
+
+per = input.int(defval=100, minval=1, title='Period', group=rf_group,inline = 'rf')
+
+// Range Multiplier
+
+mult = input.float(defval=3.0, minval=0.1, title='Multiplier', group=rf_group,inline = 'rf')
+
+// Smooth Average Range
+
+smoothrng(x, t, m) =>
+    wper = t * 2 - 1
+    avrng = ta.ema(math.abs(x - x[1]), t)
+    smoothrng = ta.ema(avrng, wper) * m
+    smoothrng
+smrng = smoothrng(src, per, mult)
+
+// Range Filter
+
+rngfilt(x, r) =>
+    rngfilt = x
+    rngfilt := x > nz(rngfilt[1]) ? x - r < nz(rngfilt[1]) ? nz(rngfilt[1]) : x - r : x + r > nz(rngfilt[1]) ? nz(rngfilt[1]) : x + r
+    rngfilt
+filt = rngfilt(src, smrng)
+
+// Filter Direction
+
+upward = 0.0
+upward := filt > filt[1] ? nz(upward[1]) + 1 : filt < filt[1] ? 0 : nz(upward[1])
+downward = 0.0
+downward := filt < filt[1] ? nz(downward[1]) + 1 : filt > filt[1] ? 0 : nz(downward[1])
+
+// Target Bands
+
+hband = filt + smrng
+lband = filt - smrng
+
+
+
+///////////////////////////////
+////// RF2
+///////////////////////////////
+
+//Filter Type
+f_type = input.string(defval='Type 1', options=['Type 1', 'Type 2'], title='Filter Type')
+
+//Movement Source
+mov_src = input.string(defval='Close', options=['Wicks', 'Close'], title='Movement Source')
+
+//Range Size Inputs
+rng_qty = input.float(defval=2.618, minval=0.0000001, title='Range Size')
+rng_scale = input.string(defval='Average Change', options=['Points', 'Pips', 'Ticks', '% of Price', 'ATR', 'Average Change', 'Standard Deviation', 'Absolute'], title='Range Scale')
+
+//Range Period
+rng_per = input.int(defval=14, minval=1, title='Range Period (for ATR, Average Change, and Standard Deviation)')
+
+//Range Smoothing Inputs
+smooth_range = input(defval=true, title='Smooth Range')
+smooth_per = input.int(defval=27, minval=1, title='Smoothing Period')
+
+//Filter Value Averaging Inputs
+av_vals = input(defval=false, title='Average Filter Changes')
+av_samples = input.int(defval=2, minval=1, title='Number Of Changes To Average')
+
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Definitions
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//High And Low Values
+h_val = mov_src == 'Wicks' ? high : close
+l_val = mov_src == 'Wicks' ? low : close
+
+//Range Filter Values
+[h_band, l_band, filt2] = rng_filt(h_val, l_val, rng_size((h_val + l_val) / 2, rng_scale, rng_qty, rng_per), rng_per, f_type, smooth_range, smooth_per, av_vals, av_samples)
+
+//Direction Conditions
+var fdir2 = 0.0
+fdir2 := filt2 > filt2[1] ? 1 : filt2 < filt2[1] ? -1 : fdir2
+rfupward = fdir2 == 1 ? 1 : 0
+rfdownward= fdir2 == -1 ? 1 : 0
+
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//color and switchboard rf
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+filtcolor = upward > 0 ? color.lime : downward > 0  ? color.red : color.orange
+// filt2_color = rfupward ? #05ff9b : rfdownward ? #ff0583 : #cccccc
+
+filttype = string(na)
+if rftype == "Default"
+    filttype := "filt"
+else if rftype == "DW"
+    filttype := "filt2"
+
+
+filtplot = plot(switch_rangefilter  and showrfline?filt:na, color=filtcolor, linewidth=2, title='Range Filter')
+// filtplot2 = plot(switch_rangefilter2 ?filt2:na, color=filt2_color, linewidth=2, title='Range Filter')
+
+
+
+
+////////////////////////////////
+/// RQK
+////////////////////////////////
+
+rqkgroupname = '████████ Rational Quadratic Kernel (RQK) ████████'
+rqksrc = input.source(close, 'Source', group=rqkgroupname)
+h2 = input.float(8., 'Lookback Window', minval=3., tooltip='The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars. Recommended range: 3-50', group=rqkgroupname)
+r = input.float(8., 'Relative Weighting', step=0.25, group=rqkgroupname, tooltip='Relative weighting of time frames. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel. Recommended range: 0.25-25')
+x_0 = input.int(25, "Start Regression at Bar", group=rqkgroupname, tooltip='Bar index on which to start regression. The first bars of a chart are often highly volatile, and omission of these initial bars often leads to a better overall fit. Recommended range: 5-25')
+smoothColors = input.bool(false, "Smooth Colors", group=rqkgroupname, tooltip="Uses a crossover based mechanism to determine colors. This often results in less color transitions overall.", inline='1')
+lag = input.int(2, "Lag", group=rqkgroupname, tooltip="Lag for crossover detection. Lower values result in earlier crossovers. Recommended range: 1-2", inline='1')
+size = array.size(array.from(rqksrc)) // size of the data series
+
+kernel_regression(_rqksrc, _size, _h2) =>
+    float _currentWeight = 0.
+    float _cumulativeWeight = 0.
+    for i = 0 to _size + x_0
+        y = _rqksrc[i] 
+        w = math.pow(1 + (math.pow(i, 2) / ((math.pow(_h2, 2) * 2 * r))), -r)
+        _currentWeight += y*w
+        _cumulativeWeight += w
+    _currentWeight / _cumulativeWeight
+
+
+
+
+var bool rqkuptrend = na 
+var bool rqkdowntrend = na 
+
+
+if respectrqk or leadingindicator=="Rational Quadratic Kernel (RQK)"
+// Estimations
+    yhat1 = kernel_regression(rqksrc, size, h2)
+    yhat2 = kernel_regression(rqksrc, size, h2-lag)
+
+    // Rates of Change
+    bool wasBearish = yhat1[2] > yhat1[1]
+    bool wasBullish = yhat1[2] < yhat1[1]
+    bool isBearish = yhat1[1] > yhat1
+    bool isBullish = yhat1[1] < yhat1
+    bool isBearishChange = isBearish and wasBullish
+    bool isBullishChange = isBullish and wasBearish
+
+    // Crossovers
+    bool isBullishCross = ta.crossover(yhat2, yhat1)
+    bool isBearishCross = ta.crossunder(yhat2, yhat1) 
+    bool isBullishSmooth = yhat2 > yhat1
+    bool isBearishSmooth = yhat2 < yhat1
+
+
+    rqkuptrend := yhat1[1] < yhat1
+    rqkdowntrend := yhat1[1] > yhat1
+
+
+
+
+
+/////////////////////////////
+////////// TSI
+/////////////////////////////
+tsi_group = "██████████ True Strength Indicator (TSI) ██████████"
+
+tsi_long_length = input(title="Long Length", defval=25,group=tsi_group)
+tsi_short_length = input(title="Short Length", defval=13,group=tsi_group)
+tsi_signal_length = input(title="Signal Length", defval=13,group=tsi_group)
+tsi_price = close 
+tsi_double_smooth(src, long, short) =>
+	fist_smooth = ta.ema(src, long)
+	ta.ema(fist_smooth, short)
+tsi_pc = ta.change(tsi_price)
+tsi_double_smoothed_pc = tsi_double_smooth(tsi_pc, tsi_long_length, tsi_short_length)
+tsi_double_smoothed_abs_pc = tsi_double_smooth(math.abs(tsi_pc), tsi_long_length, tsi_short_length)
+tsi_value = 100 * (tsi_double_smoothed_pc / tsi_double_smoothed_abs_pc)
+
+var tsi_long = bool(na)
+var tsi_short = bool(na)
+tsi_signal = ta.ema(tsi_value, tsi_signal_length)
+
+if tsitype == "Signal Cross"
+    tsi_long := tsi_value > tsi_signal
+    tsi_short := tsi_value < tsi_signal
+else if tsitype == "Zero line cross"
+    tsi_long := tsi_value > tsi_signal and tsi_value>0
+    tsi_short := tsi_value < tsi_signal and tsi_value<0
